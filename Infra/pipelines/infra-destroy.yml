@@ -1,0 +1,118 @@
+name: Terraform-FinApp-Destroy-$(Date:yyyyMMdd)$(Rev:.r)
+
+trigger: none
+
+pr: none
+
+variables:
+  - name: environment
+    value: 'Production'
+  - name: subscriptionConnection
+    value: ''
+  - name: tfstorageAccountName
+    value: ''
+  - name: tfStorageAccountRgname
+    value: ''
+  - name: tfcontainerName
+    value: 'terraformstatefile'
+
+pool:
+  name: 'named-azure-pipelines-agent-pool'
+
+parameters:
+  - name: planDestroy
+    displayName: 'Terraform Plan for Resource Destruction'
+    type: boolean
+    default: false
+  - name: destroyResources
+    displayName: 'Terraform Destroy Resources'
+    type: boolean
+    default: false
+
+stages:
+  - stage: Plan_Destroy
+    displayName: 'Plan Resource Destruction'
+    condition: eq('${{ parameters.planDestroy }}', 'true')
+    jobs:
+      - job: Plan_Destroy
+        displayName: 'Generate Destroy Plan'
+        steps:
+          - checkout: self
+          
+          - template: pipelines/templates/terraform.yml
+            parameters:
+              tfDir: ''
+              terraformCommandOptions: '-var-file="terraform.tfvars" -destroy -out=destroy-plan'
+              backendAzureRmKeyName: 'financial-app.terraform.tfstate'
+              subscriptionConnection: ${{ variables.subscriptionConnection }}
+              tfStorageAccount: ${{ variables.tfstorageAccountName }}
+              tfStorageAccountRg: ${{ variables.tfStorageAccountRgname }}
+              terraformCommand: 'plan'
+              tfTaskDisplayName: 'Plan Resource Destruction'
+              deploy: true
+
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish Destroy Plan'
+            inputs:
+              pathtoPublish: '$(System.DefaultWorkingDirectory)/destroy-plan'
+              artifactName: 'terraform-destroy-plan'
+              publishLocation: 'Container'
+
+  - stage: Approve_Destruction
+    displayName: 'Approve Resource Destruction'
+    dependsOn: Plan_Destroy
+    condition: and(succeeded(), eq('${{ parameters.planDestroy }}', 'true'))
+    jobs:
+      - job: WaitForDestructionApproval
+        displayName: 'Wait for Destruction Approval'
+        pool: server
+        timeoutInMinutes: 4320
+        steps:
+          - task: ManualValidation@0
+            displayName: 'Approve Resource Destruction'
+            inputs:
+              instructions: '⚠️ WARNING: This will DESTROY ALL Financial App resources including 50TB PostgreSQL databases and 100TB storage. This action is IRREVERSIBLE. Review the destroy plan carefully before approving.'
+              onTimeout: 'reject'
+
+  - stage: Destroy_Resources
+    displayName: 'Destroy Resources'
+    dependsOn: Approve_Destruction
+    condition: and(succeeded(), eq('${{ parameters.destroyResources }}', 'true'))
+    jobs:
+      - deployment: Destroy_Financial_App_Resources
+        displayName: 'Destroy Financial App Resources'
+        environment: Production
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+                
+                - download: current
+                  artifact: terraform-destroy-plan
+                  displayName: 'Download Destroy Plan'
+
+                - template: pipelines/templates/terraform.yml
+                  parameters:
+                    tfDir: ''
+                    terraformCommandOptions: '-auto-approve destroy-plan'
+                    backendAzureRmKeyName: 'financial-app.terraform.tfstate'
+                    subscriptionConnection: ${{ variables.subscriptionConnection }}
+                    tfStorageAccount: ${{ variables.tfstorageAccountName }}
+                    tfStorageAccountRg: ${{ variables.tfStorageAccountRgname }}
+                    terraformCommand: 'apply'
+                    tfTaskDisplayName: 'Apply Destroy Plan'
+                    deploy: true
+
+  - stage: Cleanup
+    displayName: 'Cleanup'
+    dependsOn: Destroy_Resources
+    condition: succeeded()
+    jobs:
+      - job: Post_Destroy
+        displayName: 'Post Destruction Tasks'
+        steps:
+          - script: |
+              echo "Resource destruction completed successfully!"
+              echo "All Financial App resources have been destroyed."
+            displayName: 'Destruction Complete'

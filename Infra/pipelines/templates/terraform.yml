@@ -1,0 +1,55 @@
+parameters:
+  - name: tfDir
+    default: ''
+  - name: backendAzureRmKeyName
+    default: ''
+  - name: terraformCommandOptions
+    default: ''
+  - name: subscriptionConnection
+    default: ''
+  - name: terraformCommand
+    default: ''
+  - name: tfStorageAccount
+    default: ''
+  - name: tfTaskDisplayName
+    default: ''
+  - name: tfStorageAccountRg
+    type: string
+    default: ''
+  - name: deploy
+    type: boolean
+    default: true
+
+steps:
+  - ${{ if eq(parameters.deploy, true) }}:
+    - task: ms-devlabs.custom-terraform-tasks.custom-terraform-installer-task.TerraformInstaller@1
+      displayName: Install terraform
+      inputs:
+        terraformVersion: '1.9.3'
+
+    - task: TerraformTaskV4@4
+      displayName: Initialize Terraform
+      env:
+        TF_LOG: ERROR
+      inputs:
+        command: 'init'
+        provider: 'azurerm'
+        backendServiceArm: ${{ parameters.subscriptionConnection }}
+        workingDirectory: $(System.DefaultWorkingDirectory)/${{ parameters.tfDir }}
+        backendAzureRmResourceGroupName: ${{ parameters.tfStorageAccountRg }}
+        backendAzureRmStorageAccountName: ${{ parameters.tfStorageAccount }}
+        backendAzureRmContainerName: 'terraformstatefile'
+        backendAzureRmKey: ${{ parameters.backendAzureRmKeyName }}
+        ensureBackend: true
+        allowTelemetryCollection: true
+        commandOptions: '-migrate-state'
+
+    - task: TerraformTaskV4@4
+      displayName: TF ${{ parameters.terraformCommand }} - ${{ parameters.tfTaskDisplayName }}
+      inputs:
+        runAzLogin: true
+        allowTelemetryCollection: true
+        command: '${{ parameters.terraformCommand }}'
+        commandOptions: '${{ parameters.terraformCommandOptions }}'
+        environmentServiceNameAzureRM: ${{ parameters.subscriptionConnection }}
+        workingDirectory: $(System.DefaultWorkingDirectory)/${{ parameters.tfDir }}

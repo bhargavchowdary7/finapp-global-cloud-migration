@@ -1,0 +1,166 @@
+name: Terraform-FinApp-$(Date:yyyyMMdd)$(Rev:.r)
+
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - '**/*.tf'
+      - '**/*.tfvars'
+
+pr: none
+
+variables:
+  - name: environment
+    value: 'Production'
+  - name: subscriptionConnection
+    value: ''
+  - name: tfstorageAccountName
+    value: ''
+  - name: tfStorageAccountRgname
+    value: ''
+  - name: tfcontainerName
+    value: 'terraformstatefile'
+
+pool:
+  name: 'named-azure-pipelines-agent-pool'
+
+parameters:
+  - name: runTerraformPlan
+    displayName: 'Run Terraform Plan'
+    type: boolean
+    default: false
+  - name: runTerraformApply
+    displayName: 'Run Terraform Apply'
+    type: boolean
+    default: false
+
+stages:
+  - stage: Validate
+    displayName: 'Validate Terraform'
+    jobs:
+      - job: Validate_Terraform
+        displayName: 'Validate Configuration'
+        steps:
+          - checkout: self
+          
+          - task: ms-devlabs.custom-terraform-tasks.custom-terraform-installer-task.TerraformInstaller@1
+            displayName: 'Install Terraform 1.9.3'
+            inputs:
+              terraformVersion: '1.9.3'
+
+          - script: |
+              echo "Running Terraform format check..."
+              terraform fmt -check -recursive
+            displayName: 'Terraform Format Check'
+            workingDirectory: '$(System.DefaultWorkingDirectory)'
+
+          - script: |
+              echo "Running Terraform validation..."
+              terraform validate
+            displayName: 'Terraform Validate'
+            workingDirectory: '$(System.DefaultWorkingDirectory)'
+
+  - stage: Plan
+    displayName: 'Terraform Plan'
+    dependsOn: Validate
+    condition: eq('${{ parameters.runTerraformPlan }}', 'true')
+    jobs:
+      - job: Terraform_Plan
+        displayName: 'Generate Terraform Plan'
+        steps:
+          - checkout: self
+          
+          - template: pipelines/templates/terraform.yml
+            parameters:
+              tfDir: ''
+              terraformCommandOptions: '-var-file="terraform.tfvars" -out=tfplan'
+              backendAzureRmKeyName: 'financial-app.terraform.tfstate'
+              subscriptionConnection: ${{ variables.subscriptionConnection }}
+              tfStorageAccount: ${{ variables.tfstorageAccountName }}
+              tfStorageAccountRg: ${{ variables.tfStorageAccountRgname }}
+              terraformCommand: 'plan'
+              tfTaskDisplayName: 'Plan Financial App Infrastructure'
+              deploy: true
+
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish Terraform Plan'
+            inputs:
+              pathtoPublish: '$(System.DefaultWorkingDirectory)/tfplan'
+              artifactName: 'terraform-plan'
+              publishLocation: 'Container'
+
+  - stage: Approve
+    displayName: 'Manual Approval'
+    dependsOn: Plan
+    condition: and(succeeded(), eq('${{ parameters.runTerraformPlan }}', 'true'))
+    jobs:
+      - job: WaitForApproval
+        displayName: 'Wait for Approval'
+        pool: server
+        timeoutInMinutes: 4320
+        steps:
+          - task: ManualValidation@0
+            displayName: 'Approve Terraform Apply'
+            inputs:
+              instructions: 'Please review the Terraform plan in the previous stage. Approve to apply changes to Production environment.'
+              onTimeout: 'reject'
+
+  - stage: Apply
+    displayName: 'Terraform Apply'
+    dependsOn: Approve
+    condition: and(succeeded(), eq('${{ parameters.runTerraformApply }}', 'true'))
+    jobs:
+      - deployment: Terraform_Apply
+        displayName: 'Apply Terraform Changes'
+        environment: Production
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+                
+                - download: current
+                  artifact: terraform-plan
+                  displayName: 'Download Terraform Plan'
+
+                - template: pipelines/templates/terraform.yml
+                  parameters:
+                    tfDir: ''
+                    terraformCommandOptions: '-auto-approve tfplan'
+                    backendAzureRmKeyName: 'financial-app.terraform.tfstate'
+                    subscriptionConnection: ${{ variables.subscriptionConnection }}
+                    tfStorageAccount: ${{ variables.tfstorageAccountName }}
+                    tfStorageAccountRg: ${{ variables.tfStorageAccountRgname }}
+                    terraformCommand: 'apply'
+                    tfTaskDisplayName: 'Apply Infrastructure Changes'
+                    deploy: true
+
+                - template: pipelines/templates/terraform.yml
+                  parameters:
+                    tfDir: ''
+                    terraformCommandOptions: '-json'
+                    backendAzureRmKeyName: 'financial-app.terraform.tfstate'
+                    subscriptionConnection: ${{ variables.subscriptionConnection }}
+                    tfStorageAccount: ${{ variables.tfstorageAccountName }}
+                    tfStorageAccountRg: ${{ variables.tfStorageAccountRgname }}
+                    terraformCommand: 'output'
+                    tfTaskDisplayName: 'Export Terraform Outputs'
+                    deploy: true
+
+  - stage: Notify
+    displayName: 'Deployment Status'
+    dependsOn: 
+      - Apply
+    condition: always()
+    jobs:
+      - job: Notification
+        displayName: 'Send Notification'
+        pool: server
+        steps:
+          - script: |
+              echo "Terraform deployment completed with status: $(Agent.JobStatus)"
+              echo "Environment: $(environment)"
+              echo "Subscription: $(subscriptionConnection)"
+            displayName: 'Deployment Status Summary'
