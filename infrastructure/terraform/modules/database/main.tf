@@ -86,3 +86,8 @@ resource "azurerm_postgresql_flexible_server_database" "transaction_db" {
 resource "random_id" "suffix" {
   byte_length = 4
 }
+
+# Read replicas for sub-50ms latency
+resource "azurerm_postgresql_flexible_server_replica" "read_replica" {
+  # Add read replicas in each AZ
+}
