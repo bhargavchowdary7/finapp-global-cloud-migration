@@ -1,30 +1,11 @@
 name: Terraform-FinApp-$(Date:yyyyMMdd)$(Rev:.r)
 
-trigger:
-  branches:
-    include:
-      - main
-  paths:
-    include:
-      - '**/*.tf'
-      - '**/*.tfvars'
-
-pr: none
-
-variables:
-  - name: environment
-    value: 'Production'
-  - name: subscriptionConnection
-    value: ''
-  - name: tfstorageAccountName
-    value: ''
-  - name: tfStorageAccountRgname
-    value: ''
-  - name: tfcontainerName
-    value: 'terraformstatefile'
+trigger: none
 
 pool:
   name: 'named-azure-pipelines-agent-pool'
+  
+
 
 parameters:
   - name: runTerraformPlan
@@ -35,6 +16,18 @@ parameters:
     displayName: 'Run Terraform Apply'
     type: boolean
     default: false
+
+variables:
+  - name: environment
+    value: 'Production'
+  - name: subscriptionConnection
+    value: 'Name of the subscriptionConnection'
+  - name: tfstorageAccountName
+    value: 'terraform'
+  - name: tfStorageAccountRgname
+    value: 'rg name of the storage account'
+  - name: tfcontainerName
+    value: 'terraformstatefile'
 
 stages:
   - stage: Validate
@@ -72,7 +65,7 @@ stages:
         steps:
           - checkout: self
           
-          - template: pipelines/templates/terraform.yml
+          - template: ${{ variables['System.DefaultWorkingDirectory'] }}/pipelines/templates/terraform.yml
             parameters:
               tfDir: ''
               terraformCommandOptions: '-var-file="terraform.tfvars" -out=tfplan'
@@ -125,7 +118,7 @@ stages:
                   artifact: terraform-plan
                   displayName: 'Download Terraform Plan'
 
-                - template: pipelines/templates/terraform.yml
+                - template: ${{ variables['System.DefaultWorkingDirectory'] }}/pipelines/templates/terraform.yml
                   parameters:
                     tfDir: ''
                     terraformCommandOptions: '-auto-approve tfplan'
@@ -137,7 +130,7 @@ stages:
                     tfTaskDisplayName: 'Apply Infrastructure Changes'
                     deploy: true
 
-                - template: pipelines/templates/terraform.yml
+                - template: ${{ variables['System.DefaultWorkingDirectory'] }}/pipelines/templates/terraform.yml
                   parameters:
                     tfDir: ''
                     terraformCommandOptions: '-json'

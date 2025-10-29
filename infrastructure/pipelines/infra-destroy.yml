@@ -2,22 +2,22 @@ name: Terraform-FinApp-Destroy-$(Date:yyyyMMdd)$(Rev:.r)
 
 trigger: none
 
-pr: none
+pool:
+  name: 'named-azure-pipelines-agent-pool'
 
 variables:
   - name: environment
     value: 'Production'
   - name: subscriptionConnection
-    value: ''
+    value: 'Name of the subscriptionConnection''
   - name: tfstorageAccountName
-    value: ''
+    value: 'terraform storage account name'
   - name: tfStorageAccountRgname
-    value: ''
+    value: 'rg name of the storage account'
   - name: tfcontainerName
     value: 'terraformstatefile'
 
-pool:
-  name: 'named-azure-pipelines-agent-pool'
+
 
 parameters:
   - name: planDestroy
@@ -39,7 +39,7 @@ stages:
         steps:
           - checkout: self
           
-          - template: pipelines/templates/terraform.yml
+          - template: ${{ variables['System.DefaultWorkingDirectory'] }}/pipelines/templates/terraform.yml
             parameters:
               tfDir: ''
               terraformCommandOptions: '-var-file="terraform.tfvars" -destroy -out=destroy-plan'
@@ -92,7 +92,7 @@ stages:
                   artifact: terraform-destroy-plan
                   displayName: 'Download Destroy Plan'
 
-                - template: pipelines/templates/terraform.yml
+                - template: ${{ variables['System.DefaultWorkingDirectory'] }}/pipelines/templates/terraform.yml
                   parameters:
                     tfDir: ''
                     terraformCommandOptions: '-auto-approve destroy-plan'
