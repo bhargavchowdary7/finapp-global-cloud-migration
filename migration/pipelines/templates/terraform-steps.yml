@@ -1,0 +1,257 @@
+# Terraform Steps Template for Azure DevOps Pipelines
+# Provides reusable Terraform steps for infrastructure provisioning
+
+parameters:
+- name: 'environment'
+  type: string
+  default: 'dev'
+  values:
+  - 'dev'
+  - 'staging'
+  - 'prod'
+  
+- name: 'terraformVersion'
+  type: string
+  default: '1.5.0'
+  
+- name: 'workingDirectory'
+  type: string
+  default: 'terraform'
+  
+- name: 'backendConfig'
+  type: object
+  default:
+    storage_account_name: ''
+    container_name: ''
+    key: ''
+    resource_group_name: ''
+    
+- name: 'variables'
+  type: object
+  default: []
+  
+- name: 'runPlanOnly'
+  type: boolean
+  default: false
+  
+- name: 'autoApprove'
+  type: boolean
+  default: false
+  
+- name: 'targetSpecific'
+  type: string
+  default: ''
+
+steps:
+# Install Terraform
+- task: TerraformInstaller@1
+  inputs:
+    terraformVersion: '${{ parameters.terraformVersion }}'
+  displayName: 'Install Terraform ${{ parameters.terraformVersion }}'
+
+# Install Azure CLI
+- task: AzureCLI@2
+  inputs:
+    azureSubscription: '$(AzureSubscription)'
+    scriptType: 'pscore'
+    scriptLocation: 'inlineScript'
+    inlineScript: |
+      Write-Host "Azure CLI version:"
+      az --version
+      
+      Write-Host "`nSetting subscription context..."
+      az account show
+  displayName: 'Install and Configure Azure CLI'
+
+# Terraform Init with Backend Configuration
+- task: TerraformTaskV4@4
+  inputs:
+    provider: 'azurerm'
+    command: 'init'
+    workingDirectory: '${{ parameters.workingDirectory }}'
+    backendServiceArm: '$(AzureSubscription)'
+    backendAzureRmResourceGroupName: '${{ parameters.backendConfig.resource_group_name }}'
+    backendAzureRmStorageAccountName: '${{ parameters.backendConfig.storage_account_name }}'
+    backendAzureRmContainerName: '${{ parameters.backendConfig.container_name }}'
+    backendAzureRmKey: '${{ parameters.backendConfig.key }}-${{ parameters.environment }}.tfstate'
+    environmentServiceNameAzureRM: '$(AzureSubscription)'
+  displayName: 'Terraform Init with Backend'
+
+# Terraform Validate
+- task: TerraformTaskV4@4
+  inputs:
+    provider: 'azurerm'
+    command: 'validate'
+    workingDirectory: '${{ parameters.workingDirectory }}'
+    environmentServiceNameAzureRM: '$(AzureSubscription)'
+  displayName: 'Terraform Validate'
+
+# Terraform Plan
+- task: TerraformTaskV4@4
+  inputs:
+    provider: 'azurerm'
+    command: 'plan'
+    workingDirectory: '${{ parameters.workingDirectory }}'
+    environmentServiceNameAzureRM: '$(AzureSubscription)'
+    commandOptions: '-var-file="terraform.${{ parameters.environment }}.tfvars" -out="terraform.${{ parameters.environment }}.tfplan"'
+  displayName: 'Terraform Plan'
+
+# Conditionally run Terraform Apply
+- ${{ if not(parameters.runPlanOnly) }}:
+  - task: TerraformTaskV4@4
+    inputs:
+      provider: 'azurerm'
+      command: 'apply'
+      workingDirectory: '${{ parameters.workingDirectory }}'
+      environmentServiceNameAzureRM: '$(AzureSubscription)'
+      commandOptions: '${{ if parameters.autoApprove }}-auto-approv${{ end }} "terraform.${{ parameters.environment }}.tfplan"'
+    displayName: 'Terraform Apply'
+    condition: and(succeeded(), not(eq('${{ parameters.environment }}', 'prod')))
+
+  # Manual approval for production
+  - ${{ if eq(parameters.environment, 'prod') }}:
+    - task: ManualValidation@0
+      inputs:
+        instructions: 'Please review the Terraform plan and approve for PRODUCTION deployment'
+        onTimeout: 'reject'
+      displayName: 'Wait for PRODUCTION approval'
+      condition: and(succeeded(), eq('${{ parameters.environment }}', 'prod'))
+
+    - task: TerraformTaskV4@4
+      inputs:
+        provider: 'azurerm'
+        command: 'apply'
+        workingDirectory: '${{ parameters.workingDirectory }}'
+        environmentServiceNameAzureRM: '$(AzureSubscription)'
+        commandOptions: '-auto-approve "terraform.${{ parameters.environment }}.tfplan"'
+      displayName: 'Terraform Apply - PRODUCTION'
+      condition: and(succeeded(), eq('${{ parameters.environment }}', 'prod'))
+
+# Terraform Output
+- task: TerraformTaskV4@4
+  inputs:
+    provider: 'azurerm'
+    command: 'output'
+    workingDirectory: '${{ parameters.workingDirectory }}'
+    environmentServiceNameAzureRM: '$(AzureSubscription)'
+    commandOptions: '-json > "$(Pipeline.Workspace)/terraform-output-${{ parameters.environment }}.json"'
+  displayName: 'Terraform Output'
+
+# Parse and process Terraform outputs
+- powershell: |
+    Write-Host "Processing Terraform outputs for ${{ parameters.environment }} environment..."
+    
+    $outputFile = "$(Pipeline.Workspace)/terraform-output-${{ parameters.environment }}.json"
+    if (Test-Path $outputFile) {
+      $outputs = Get-Content $outputFile | ConvertFrom-Json -AsHashtable
+      
+      # Set pipeline variables from Terraform outputs
+      foreach ($output in $outputs.GetEnumerator()) {
+        $variableName = "TF_OUTPUT_$($output.Key.ToUpper())"
+        $variableValue = $output.Value.value
+        
+        Write-Host "Setting variable: $variableName = $variableValue"
+        Write-Host "##vso[task.setvariable variable=$variableName]$variableValue"
+        
+        # Special handling for sensitive values
+        if ($output.Value.sensitive -eq $true) {
+          Write-Host "##vso[task.setvariable variable=$variableName;issecret=true]$variableValue"
+        }
+      }
+      
+      # Generate configuration file for migration scripts
+      $migrationConfig = @{
+        Environment = "${{ parameters.environment }}"
+        GeneratedDate = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+        StorageAccount = @{
+          Name = $outputs.storage_account_name.value
+          ResourceGroup = $outputs.resource_group_name.value
+          FileShare = $outputs.file_share_name.value
+        }
+        KeyVault = @{
+          Name = $outputs.key_vault_name.value
+          URI = $outputs.key_vault_uri.value
+        }
+        Network = @{
+          VNetName = $outputs.virtual_network_name.value
+          SubnetIDs = $outputs.subnet_ids.value
+        }
+      }
+      
+      if ($outputs.sql_server_name.value) {
+        $migrationConfig.SQLServer = @{
+          Name = $outputs.sql_server_name.value
+          FQDN = $outputs.sql_server_fqdn.value
+          Database = $outputs.sql_database_name.value
+        }
+      }
+      
+      $configPath = "$(Pipeline.Workspace)/migration-config"
+      if (!(Test-Path $configPath)) {
+        New-Item -ItemType Directory -Path $configPath -Force
+      }
+      
+      $migrationConfig | ConvertTo-Json -Depth 5 | Out-File -FilePath "$configPath/migration-config-${{ parameters.environment }}.json"
+      Write-Host "Migration configuration generated: $configPath/migration-config-${{ parameters.environment }}.json" -ForegroundColor Green
+    } else {
+      Write-Warning "Terraform output file not found: $outputFile"
+    }
+  displayName: 'Process Terraform Outputs'
+
+# Run security scan on Terraform code
+- task: TerraformTaskV4@4
+  inputs:
+    provider: 'azurerm'
+    command: 'fmt'
+    workingDirectory: '${{ parameters.workingDirectory }}'
+    commandOptions: '-check -recursive'
+  displayName: 'Terraform Format Check'
+
+# Run security scan (if tfsec is available)
+- script: |
+    echo "Installing tfsec..."
+    curl -s https://raw.githubusercontent.com/aquasecurity/tfsec/master/scripts/install_linux.sh | bash
+  displayName: 'Install tfsec'
+  condition: and(succeeded(), eq(variables['Agent.OS'], 'Linux'))
+
+- script: |
+    echo "Running tfsec security scan..."
+    tfsec ${{ parameters.workingDirectory }} --format json --out "$(Pipeline.Workspace)/tfsec-report.json"
+  displayName: 'Run tfsec Security Scan'
+  condition: and(succeeded(), eq(variables['Agent.OS'], 'Linux'))
+
+# Publish artifacts
+- task: PublishBuildArtifacts@1
+  inputs:
+    PathtoPublish: '$(Pipeline.Workspace)'
+    ArtifactName: 'Terraform-${{ parameters.environment }}'
+    publishLocation: 'Container'
+  displayName: 'Publish Terraform Artifacts'
+
+# Send notification
+- task: Slack@2
+  inputs:
+    channel: '#deployments'
+    message: |
+      Terraform deployment for ${{ parameters.environment }} environment completed successfully!
+      • Environment: ${{ parameters.environment }}
+      • Status:  Success
+      • Commit: $(Build.SourceVersion)
+      • Build: $(Build.BuildNumber)
+    authToken: '$(SlackToken)'
+  displayName: 'Send Slack Notification'
+  condition: succeeded()
+
+- task: Slack@2
+  inputs:
+    channel: '#deployments'
+    message: |
+      Terraform deployment for ${{ parameters.environment }} environment failed!
+      • Environment: ${{ parameters.environment }}
+      • Status:  Failed
+      • Commit: $(Build.SourceVersion)
+      • Build: $(Build.BuildNumber)
+      Please check the build logs for details.
+    authToken: '$(SlackToken)'
+  displayName: 'Send Slack Failure Notification'
+  condition: failed()
