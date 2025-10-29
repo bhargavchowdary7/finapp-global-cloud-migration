@@ -10,7 +10,7 @@ regions = {
     db_storage_mb    = 51200000  # 50 TB = 50 * 1024 * 1024 MB
     db_version       = "13"
     storage_account_tier = "Standard"  # For 100TB transaction logs storage
-    storage_replication_type = "GRS"
+    storage_replication_type = "ZRS"
   }
   europe = {
     region           = "UK South"  # Europe (UK) region as per PDF
@@ -18,7 +18,7 @@ regions = {
     db_storage_mb    = 51200000  # 50 TB
     db_version       = "13"
     storage_account_tier = "Standard"
-    storage_replication_type = "GRS"
+    storage_replication_type = "ZRS"
   }
   asia = {
     region           = "Southeast Asia"  # Asia (Singapore) region as per PDF
@@ -26,7 +26,7 @@ regions = {
     db_storage_mb    = 51200000  # 50 TB
     db_version       = "13"
     storage_account_tier = "Standard"
-    storage_replication_type = "GRS"
+    storage_replication_type = "ZRS"
   }
 }
 
