@@ -22,3 +22,13 @@ output "database_name" {
   description = "Transaction database name"
   value       = azurerm_postgresql_flexible_server_database.transaction_db.name
 }
+
+output "read_replica_az2_fqdn" {
+  value = azurerm_postgresql_flexible_server_replica.read_replica_az2.fqdn
+  description = "FQDN of read replica in AZ2"
+}
+
+output "read_replica_az3_fqdn" {
+  value = azurerm_postgresql_flexible_server_replica.read_replica_az3.fqdn
+  description = "FQDN of read replica in AZ3"
+}

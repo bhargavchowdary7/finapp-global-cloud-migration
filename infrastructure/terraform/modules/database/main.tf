@@ -87,7 +87,21 @@ resource "random_id" "suffix" {
   byte_length = 4
 }
 
-# Read replicas for sub-50ms latency
-resource "azurerm_postgresql_flexible_server_replica" "read_replica" {
-  # Add read replicas in each AZ
+# Read replicas for sub-50ms latency (one per availability zone)
+resource "azurerm_postgresql_flexible_server_replica" "read_replica_az2" {
+  name                = "${azurerm_postgresql_flexible_server.main.name}-replica-az2"
+  source_server_id    = azurerm_postgresql_flexible_server.main.id
+  location            = var.region
+  zone                = "2"
+  
+  tags = merge(var.tags, { Role = "ReadReplica", Zone = "2" })
+}
+
+resource "azurerm_postgresql_flexible_server_replica" "read_replica_az3" {
+  name                = "${azurerm_postgresql_flexible_server.main.name}-replica-az3"
+  source_server_id    = azurerm_postgresql_flexible_server.main.id
+  location            = var.region
+  zone                = "3"
+  
+  tags = merge(var.tags, { Role = "ReadReplica", Zone = "3" })
 }
