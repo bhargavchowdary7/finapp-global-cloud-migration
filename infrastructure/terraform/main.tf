@@ -68,6 +68,28 @@ resource "azurerm_key_vault_access_policy" "current_user" {
   ]
 }
 
+# Store SQL Admin password in Key Vault
+resource "azurerm_key_vault_secret" "sql_admin_password" {
+  for_each = var.regions
+
+  name         = "sql-admin-password"
+  value        = var.sql_admin_password
+  key_vault_id = azurerm_key_vault.main[each.key].id
+
+  depends_on = [azurerm_key_vault_access_policy.current_user]
+}
+
+# Get SQL Admin password from Key Vault
+data "azurerm_key_vault_secret" "sql_admin_password" {
+  for_each = var.regions
+
+  name         = "sql-admin-password"
+  key_vault_id = azurerm_key_vault.main[each.key].id
+
+  depends_on = [azurerm_key_vault_secret.sql_admin_password]
+}
+
+
 # Regional SQL Databases for data sovereignty - Primary
 resource "azurerm_mssql_server" "regional_primary" {
   for_each = var.regions
@@ -77,7 +99,8 @@ resource "azurerm_mssql_server" "regional_primary" {
   location                     = each.value.region
   version                      = "12.0"
   administrator_login          = var.sql_admin_username
-  administrator_login_password = var.sql_admin_password
+  #administrator_login_password = var.sql_admin_password
+  administrator_login_password = data.azurerm_key_vault_secret.sql_admin_password[each.key].value
 
   # Critical for data sovereignty - restrict public access
   connection_policy = "Proxy"  # More restrictive than Default

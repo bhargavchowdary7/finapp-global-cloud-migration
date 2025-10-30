@@ -7,7 +7,8 @@ resource "azurerm_mssql_server" "regional_dr" {
   location                     = each.value.region  # Same region for sovereignty
   version                      = "12.0"
   administrator_login          = var.sql_admin_username
-  administrator_login_password = var.sql_admin_password
+  administrator_login_password = data.azurerm_key_vault_secret.sql_admin_password[each.key].value
+  #administrator_login_password = var.sql_admin_password
 
   connection_policy = "Proxy"
 
