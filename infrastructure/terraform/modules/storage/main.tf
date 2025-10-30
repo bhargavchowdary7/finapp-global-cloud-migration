@@ -1,4 +1,4 @@
-# Storage Account for 100TB transaction logs and archives
+# Enhanced Storage Account with disabled public access
 resource "azurerm_storage_account" "main" {
   name                     = "st${replace(lower(var.region), " ", "")}${random_id.suffix.hex}"
   resource_group_name      = var.resource_group
@@ -11,13 +11,40 @@ resource "azurerm_storage_account" "main" {
   # For transaction logs - Hot tier for active, Cool for archives
   access_tier              = "Hot"
 
-  # Security: Disable public network access
+  # CRITICAL: Disable public network access for data sovereignty
   public_network_access_enabled = false
 
   # Large scale storage for 100TB
   large_file_share_enabled = true
 
+  # Enable blob versioning for RPO compliance and lifecycle management
+  blob_properties {
+    versioning_enabled = true
+    change_feed_enabled = true
+    
+    container_delete_retention_policy {
+      days = 7
+    }
+    
+    delete_retention_policy {
+      days = 365
+    }
+  }
+
   tags = var.tags
+}
+
+# ADD THESE CONTAINERS FOR THE PDF REQUIREMENTS
+resource "azurerm_storage_container" "dept_files_active" {
+  name                  = "dept-files-active"
+  storage_account_id    = azurerm_storage_account.main.id  # Use storage_account_id instead
+  container_access_type = "private"
+}
+
+resource "azurerm_storage_container" "dept_files_archive" {
+  name                  = "dept-files-archive"
+  storage_account_id    = azurerm_storage_account.main.id  # Use storage_account_id instead
+  container_access_type = "private"
 }
 
 # File Shares for NAS-like storage (replacing on-prem NAS)
@@ -126,9 +153,25 @@ resource "azurerm_private_endpoint" "file" {
   tags = var.tags
 }
 
-# Lifecycle Management Policy for cost optimization
+# UPDATED Lifecycle Management Policy for cost optimization
 resource "azurerm_storage_management_policy" "main" {
   storage_account_id = azurerm_storage_account.main.id
+
+  # Rule for dept-files-active container (PDF Requirement)
+  rule {
+    name    = "DeptFilesActiveToCool"
+    enabled = true
+    filters {
+      prefix_match = ["dept-files-active/"]
+      blob_types   = ["blockBlob"]
+    }
+    actions {
+      base_blob {
+        tier_to_cool_after_days_since_modification_greater_than = var.cool_tier_days
+        tier_to_archive_after_days_since_modification_greater_than = var.archive_tier_days
+      }
+    }
+  }
 
   # Rule for active transaction logs - move to cool after 90 days
   rule {
@@ -150,7 +193,7 @@ resource "azurerm_storage_management_policy" "main" {
     name    = "CoolToArchive"
     enabled = true
     filters {
-      prefix_match = ["txn-logs-archive/", "archive-logs/"]
+      prefix_match = ["txn-logs-archive/", "archive-logs/", "dept-files-archive/"]
       blob_types   = ["blockBlob"]
     }
     actions {

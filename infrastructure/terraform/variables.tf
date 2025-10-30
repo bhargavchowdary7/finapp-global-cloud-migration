@@ -62,3 +62,26 @@ variable "lifecycle_archive_tier_days" {
   type        = number
   default     = 365
 }
+
+variable "regions" {
+  description = "Azure regions for sovereign deployment"
+  type = map(string)
+  default = {
+    "na" = "East US 2"        # North America
+    "eu" = "UK South"         # Europe (UK)
+    "asia" = "Southeast Asia" # Asia (Singapore)
+  }
+}
+
+variable "sql_admin_username" {
+  description = "SQL Server administrator username"
+  type        = string
+  default     = "sqladmin"
+}
+
+variable "sql_admin_password" {
+  description = "SQL Server administrator password - will be retrieved from Key Vault"
+  type        = string
+  sensitive   = true
+  default     = null  # No default, must come from Key Vault
+}

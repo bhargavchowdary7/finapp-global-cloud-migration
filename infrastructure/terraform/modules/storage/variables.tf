@@ -42,3 +42,9 @@ variable "archive_tier_days" {
   type        = number
   default     = 365
 }
+
+variable "project" {
+  description = "Project name"
+  type        = string
+  default     = "finapp"
+}

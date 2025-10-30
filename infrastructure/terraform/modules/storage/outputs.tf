@@ -28,3 +28,11 @@ output "container_names" {
     archive = azurerm_storage_container.archive.name
   }
 }
+
+output "dept_files_active_container_name" {
+  value = azurerm_storage_container.dept_files_active.name
+}
+
+output "dept_files_archive_container_name" {
+  value = azurerm_storage_container.dept_files_archive.name
+}

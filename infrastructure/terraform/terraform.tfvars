@@ -40,3 +40,11 @@ admin_username = "finappadmin"
 backup_retention_days = 30 # for 7 days retention free of cost, but it was trading platform so increased to 30 days.
 lifecycle_cool_tier_days = 90
 lifecycle_archive_tier_days = 365
+
+# Option 1: Provide password directly (less secure)
+# sql_admin_username = "finappadmin"
+# sql_admin_password = "YourSecurePassword123!"
+
+# Option 2: Remove password from tfvars and use environment variables
+sql_admin_username = "finappadmin"
+# sql_admin_password will be auto-generated and stored in Key Vault
