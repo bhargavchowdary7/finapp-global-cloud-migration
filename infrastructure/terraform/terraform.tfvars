@@ -11,7 +11,7 @@ regions = {
     db_version       = "13"
     storage_account_tier = "Standard"  # For 100TB transaction logs storage
     storage_replication_type = "ZRS"
-    enable_geo_backup = true  # For production DR
+    
   }
   europe = {
     region           = "UK South"  # Europe (UK) region as per PDF
@@ -20,7 +20,7 @@ regions = {
     db_version       = "13"
     storage_account_tier = "Standard"
     storage_replication_type = "ZRS"
-    enable_geo_backup = true  # For production DR
+    
   }
   asia = {
     region           = "Southeast Asia"  # Asia (Singapore) region as per PDF
@@ -29,7 +29,7 @@ regions = {
     db_version       = "13"
     storage_account_tier = "Standard"
     storage_replication_type = "ZRS"
-    enable_geo_backup = true  # For production DR
+   
   }
 }
 

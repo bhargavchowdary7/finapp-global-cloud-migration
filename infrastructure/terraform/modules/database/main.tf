@@ -14,7 +14,7 @@ resource "azurerm_postgresql_flexible_server" "main" {
     mode                      = "ZoneRedundant"
     standby_availability_zone = "2"
   }
-  geo_redundant_backup_enabled = var.enable_geo_backup
+  
   backup_retention_days  = var.backup_retention_days
 
   # Maintenance window during low traffic
