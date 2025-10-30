@@ -130,7 +130,7 @@ resource "azurerm_private_endpoint" "file" {
 resource "azurerm_storage_management_policy" "main" {
   storage_account_id = azurerm_storage_account.main.id
 
-  # Rule for active transaction logs - move to cool after 30 days
+  # Rule for active transaction logs - move to cool after 90 days
   rule {
     name    = "ActiveLogsToCool"
     enabled = true
@@ -145,7 +145,7 @@ resource "azurerm_storage_management_policy" "main" {
     }
   }
 
-  # Rule for archive logs - move to archive after 90 days
+  # Rule for archive logs - move to archive after 365 days
   rule {
     name    = "CoolToArchive"
     enabled = true

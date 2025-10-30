@@ -52,3 +52,9 @@ variable "db_version" {
   type        = string
   default     = "13"
 }
+
+variable "enable_geo_backup" {
+  description = "Enable geo-redundant backups for disaster recovery"
+  type        = bool
+  default     = true  # Enable by default for production
+}
