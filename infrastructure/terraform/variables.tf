@@ -18,7 +18,7 @@ variable "cost_center" {
 
 # Regions as per PDF requirements
 variable "regions" {
-  description = "Azure regions for deployment matching PDF requirements"
+  description = "Azure regions for deployment with specific configurations"
   type = map(object({
     region           = string
     db_sku_name      = string
@@ -63,15 +63,6 @@ variable "lifecycle_archive_tier_days" {
   default     = 365
 }
 
-variable "regions" {
-  description = "Azure regions for sovereign deployment"
-  type = map(string)
-  default = {
-    "na" = "East US 2"        # North America
-    "eu" = "UK South"         # Europe (UK)
-    "asia" = "Southeast Asia" # Asia (Singapore)
-  }
-}
 
 variable "sql_admin_username" {
   description = "SQL Server administrator username"

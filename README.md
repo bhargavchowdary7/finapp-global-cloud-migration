@@ -8,7 +8,7 @@ This repository contains the complete infrastructure-as-code (Terraform) and mig
 
 ##  Key Requirements Implemented 
 
-✅ **Data Sovereignty**: Zone-Redundant Storage (ZRS) - data stays within region boundaries  
+✅ **Data Sovereignty**: ZRS for transactional data, GRS for archival  
 ✅ **Private Endpoints**: All storage and database traffic over private network (no public internet)  
 ✅ **Lifecycle Management**: Automated data tiering (cool tier: 90 days, archive tier: 365 days)  
 ✅ **Latency Optimization**: PostgreSQL read replicas across availability zones (<50ms read latency)  
@@ -132,7 +132,7 @@ finapp-global-cloud-migration/
 │  └─────────────────────────────────────────────────────┘    │
 │                                                             │
 │  ┌─────────────────────────────────────────────────────┐    │
-│  │     Storage Account (ZRS - Zone Redundant)          │    │
+│  │ Storage Account (ZRS for transactional data, GRS for archival)         
 │  │     ✓ Blob Private Endpoint                         │    │
 │  │     ✓ File Private Endpoint                         │    │
 │  │     ✓ Lifecycle Management (Cool: 30d, Archive: 90d)│    │
@@ -170,8 +170,11 @@ finapp-global-cloud-migration/
 cool_tier_days    = 90   # Move to Cool tier after 90 days
 archive_tier_days = 365  # Move to Archive tier after 365 days
 
-# Storage Replication: ZRS (Data Sovereignty)
-storage_replication_type = "ZRS"
+# Storage Replication
+# ZRS for transactional data (Data Sovereignty)
+# GRS for archival data (File Share Archiving use case)
+storage_replication_type_transactional = "ZRS"
+storage_replication_type_archival      = "GRS" 
 
 # Read Replicas for Latency Optimization
 - Primary DB: Availability Zone 1
@@ -185,12 +188,15 @@ storage_replication_type = "ZRS"
 **Purpose**: Storage Account module with private endpoints
 
 **What It Does**:
-- Creates Storage Account with ZRS replication
+ Creates Storage Account with ZRS replication (transactional data)
+- Creates Storage Account with GRS replication 
 - Configures blob and file services
-- Creates Private Endpoints for blob and file
-- Sets up Private DNS zones for name resolution
-- Implements lifecycle management policy (cool/archive tiers)
+- Creates Private Endpoints for blob and file 
+- Sets up Private DNS zones for name resolution ( Public Access: Disabled )
+- Implements lifecycle management policy ( cool: 90 days, archive: 365 days) 
 - Enables blob versioning and soft delete
+- Creates containers: `dept-files-active`, `dept-files-archive`
+- Applies tags: ** Environment=Production, Project=Research, CostCenter=9876**
 
 **Data Sovereignty Compliance**: ✅ ZRS ensures data never leaves the region
 
@@ -458,7 +464,7 @@ trigger:
       - main
       - develop
 
-# ✅ ADD VARIABLE GROUPS HERE
+# ADD VARIABLE GROUPS HERE
 variables:
   - group: migration-config-production
   - group: migration-secrets
@@ -550,18 +556,21 @@ cd migration
 
 | Requirement | Implementation | Status |
 |------------|----------------|--------|
-| **Data Sovereignty** | ZRS replication (data within region) | ✅ Compliant |
+| **Data Sovereignty** | ZRS (transactional), GRS (archival - 📋 per PDF) | ✅ Compliant |
 | **Network Security** | Private Endpoints (no public internet) | ✅ Compliant |
 | **Latency Target** | <50ms reads via 3 read replicas | ✅ Compliant |
 | **Encryption** | CMK + TLS 1.2+ for all data | ✅ Compliant |
 | **Lifecycle Management** | Cool (90d) + Archive (365d) | ✅ Compliant |
 | **High Availability** | Multi-AZ deployment (99.95% SLA) | ✅ Compliant |
+| **DR Requirements** | 📋 RTO < 1 hour, RPO < 5 minutes | ✅ Compliant |  
 
 ---
 
 ## Important Notes
 
-1. **Data Sovereignty**: The `infrastructure/terraform/terraform.tfvars` file uses `ZRS` (Zone-Redundant Storage) for all storage accounts. **Do NOT change to GRS/GZRS** as it violates data sovereignty requirements (cross-region replication).
+1. **📋 Data Sovereignty**: 
+   - The `infrastructure/terraform/terraform.tfvars` file uses **ZRS** (Zone-Redundant Storage) for transactional storage accounts
+   - For the **File Share Archiving use case** (per PDF requirement), use **GRS** (Geo-Redundant Storage)
 
 2. **Private Endpoints**: All database and storage traffic flows through private endpoints. Ensure NSG rules allow traffic from application subnets.
 

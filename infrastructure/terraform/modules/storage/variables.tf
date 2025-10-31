@@ -17,7 +17,7 @@ variable "account_tier" {
 variable "replication_type" {
   description = "Storage account replication type"
   type        = string
-  default     = "GRS"
+  default     = "ZRS"   #Transaction logs need ZRS for regional data sovereignty.
 }
 
 variable "subnet_id" {

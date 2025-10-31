@@ -193,6 +193,26 @@ module "storage" {
   })
 }
 
+# Separate storage account for departmental files.
+module "storage_dept_files" {
+  source = "./modules/storage"
+
+  region           = "East US 2"  # Single region for dept files
+  resource_group   = "rg-deptfiles-prod-001"
+  account_tier     = "Standard"
+  replication_type = "GRS"  # ← PDF requires GRS for general-purpose dept files
+  subnet_id        = data.azurerm_subnet.existing["northamerica"].id
+  cool_tier_days   = 90
+  archive_tier_days = 365
+
+  tags = merge(local.common_tags, {
+    Environment = "Production"
+    Project     = "Research"
+    CostCenter  = "9876"
+  })
+}
+
+
 module "monitoring" {
   for_each = var.regions
 

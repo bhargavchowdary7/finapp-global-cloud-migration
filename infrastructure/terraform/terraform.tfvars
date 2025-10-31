@@ -10,7 +10,7 @@ regions = {
     db_storage_mb    = 51200000  # 50 TB = 50 * 1024 * 1024 MB
     db_version       = "13"
     storage_account_tier = "Standard"  # For 100TB transaction logs storage
-    storage_replication_type = "GRS"
+    storage_replication_type = "ZRS"
     
   }
   europe = {
@@ -19,7 +19,7 @@ regions = {
     db_storage_mb    = 51200000  # 50 TB
     db_version       = "13"
     storage_account_tier = "Standard"
-    storage_replication_type = "GRS"
+    storage_replication_type = "ZRS"
     
   }
   asia = {
@@ -28,7 +28,7 @@ regions = {
     db_storage_mb    = 51200000  # 50 TB
     db_version       = "13"
     storage_account_tier = "Standard"
-    storage_replication_type = "GRS"
+    storage_replication_type = "ZRS"
    
   }
 }
@@ -40,6 +40,8 @@ admin_username = "finappadmin"
 backup_retention_days = 30 # for 7 days retention free of cost, but it was trading platform so increased to 30 days.
 lifecycle_cool_tier_days = 90
 lifecycle_archive_tier_days = 365
+
+
 
 # Option 1: Provide password directly (less secure)
 # sql_admin_username = "finappadmin"
