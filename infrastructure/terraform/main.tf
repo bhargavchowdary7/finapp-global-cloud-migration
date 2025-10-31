@@ -185,8 +185,8 @@ module "storage" {
   account_tier    = each.value.storage_account_tier
   replication_type = each.value.storage_replication_type
   subnet_id       = data.azurerm_subnet.existing[each.key].id
-  cool_tier_days  = var.lifecycle_cool_tier_days
-  archive_tier_days = var.lifecycle_archive_tier_days
+  lifecycle_cool_tier_days = var.lifecycle_cool_tier_days
+  lifecycle_archive_tier_days = var.lifecycle_archive_tier_days
   
   tags = merge(local.common_tags, {
     Region = each.key
@@ -202,8 +202,8 @@ module "storage_dept_files" {
   account_tier     = "Standard"
   replication_type = "GRS"  # ← PDF requires GRS for general-purpose dept files
   subnet_id        = data.azurerm_subnet.existing["northamerica"].id
-  cool_tier_days   = 90
-  archive_tier_days = 365
+  lifecycle_cool_tier_days   = 90
+  lifecycle_archive_tier_days = 365
 
   tags = merge(local.common_tags, {
     Environment = "Production"

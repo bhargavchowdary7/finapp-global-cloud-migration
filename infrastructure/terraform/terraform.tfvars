@@ -2,7 +2,7 @@ environment = "Production"
 project = "FinApp"
 cost_center = "9876"
 
-# Regions as specified in PDF: North America, Europe (UK), Asia (Singapore)
+# Regions as specified : North America, Europe (UK), Asia (Singapore)
 regions = {
   north-america = {
     region           = "East US 2"  # North America region

@@ -17,6 +17,47 @@ This repository contains the complete infrastructure-as-code (Terraform) and mig
 
 ---
 
+##  Architecture Overview
+
+
+┌─────────────────────────────────────────────────────────────────┐
+│                    Azure Region (East US 2)                     │
+│                                                                 │
+│  ┌─────────────────────────────────────────────────────┐        │
+│  │              Virtual Network (VNet)                 │        │ 
+│  │                                                     │        │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌───────────┐  │        │
+│  │  │ Subnet       │  │ Subnet       │  │ Subnet    │  │        │
+│  │  │ (App)        │  │ (Database)   │  │ (Storage) │  │        │
+│  │  │ AZ1, AZ2, AZ3│  │ AZ1, AZ2, AZ3│  │ Private   │  │        │
+│  │  └──────────────┘  └──────────────┘  │ Endpoints │  │        |
+│  │                                      └───────────┘  │        │
+│  └─────────────────────────────────────────────────────┘        │
+│                                                                 │
+│  ┌─────────────────────────────────────────────────────┐        │
+│  │     PostgreSQL Flexible Server (Primary - AZ1)      │        │
+│  │     + Read Replica (AZ2) + Read Replica (AZ3)       │        │
+│  │     ✓ Private Endpoint                              │        │
+│  │     ✓ CMK Encryption                                │        │
+│  └─────────────────────────────────────────────────────┘        │
+│                                                                 │
+│  ┌─────────────────────────────────────────────────────┐        │
+│  │ Storage Account (ZRS for transactional data, GRS for archival)         
+│  │     ✓ Blob Private Endpoint                         │        │
+│  │     ✓ File Private Endpoint                         │        │
+│  │     ✓ Lifecycle Management (Cool: 30d, Archive: 90d)│        │
+│  └─────────────────────────────────────────────────────┘        │
+│                                                                 │
+│  ┌─────────────────────────────────────────────────────┐        │
+│  │     Azure Key Vault                                 │        │
+│  │     ✓ Database credentials                          │        │
+│  │     ✓ Storage connection strings                    │        │
+│  │     ✓ Customer-managed keys (CMK)                   │        │
+│  └─────────────────────────────────────────────────────┘        │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+
+
 ##  Repository Structure
 
 ```
@@ -107,46 +148,6 @@ finapp-global-cloud-migration/
 
 ---
 
-##  Architecture Overview
-
-
-┌─────────────────────────────────────────────────────────────┐
-│                    Azure Region (East US 2)                 │
-│                                                             │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │              Virtual Network (VNet)                 │    │
-│  │                                                     │    │
-│  │  ┌──────────────┐  ┌──────────────┐  ┌───────────┐  │    │
-│  │  │ Subnet       │  │ Subnet       │  │ Subnet    │  │    │
-│  │  │ (App)        │  │ (Database)   │  │ (Storage) │  │    │
-│  │  │ AZ1, AZ2, AZ3│  │ AZ1, AZ2, AZ3│  │ Private   │  │    │
-│  │  └──────────────┘  └──────────────┘  │ Endpoints │  │    |
-│  │                                      └───────────┘  │    │
-│  └─────────────────────────────────────────────────────┘    │
-│                                                             │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │     PostgreSQL Flexible Server (Primary - AZ1)      │    │
-│  │     + Read Replica (AZ2) + Read Replica (AZ3)       │    │
-│  │     ✓ Private Endpoint                              │    │
-│  │     ✓ CMK Encryption                                │    │
-│  └─────────────────────────────────────────────────────┘    │
-│                                                             │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │ Storage Account (ZRS for transactional data, GRS for archival)         
-│  │     ✓ Blob Private Endpoint                         │    │
-│  │     ✓ File Private Endpoint                         │    │
-│  │     ✓ Lifecycle Management (Cool: 30d, Archive: 90d)│    │
-│  └─────────────────────────────────────────────────────┘    │
-│                                                             │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │     Azure Key Vault                                 │    │
-│  │     ✓ Database credentials                          │    │
-│  │     ✓ Storage connection strings                    │    │
-│  │     ✓ Customer-managed keys (CMK)                   │    │
-│  └─────────────────────────────────────────────────────┘    │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
-
 
 ---
 
@@ -167,12 +168,12 @@ finapp-global-cloud-migration/
 **Critical Configurations**:
 
 # Lifecycle Management 
-cool_tier_days    = 90   # Move to Cool tier after 90 days
-archive_tier_days = 365  # Move to Archive tier after 365 days
+lifecycle_cool_tier_days    = 90   # Move to Cool tier after 90 days
+lifecycle_archive_tier_days = 365  # Move to Archive tier after 365 days
 
 # Storage Replication
-# ZRS for transactional data (Data Sovereignty)
-# GRS for archival data (File Share Archiving use case)
+ ZRS for transactional data (Data Sovereignty)
+ GRS for archival data (File Share Archiving use case)
 storage_replication_type_transactional = "ZRS"
 storage_replication_type_archival      = "GRS" 
 
@@ -509,7 +510,7 @@ variables:
        - group: migration-secrets
      ```
 ---
-## 🚀 Deployment Instructions
+## Deployment Instructions
 
 ### 1. Infrastructure Deployment (Terraform)
 
@@ -556,7 +557,7 @@ cd migration
 
 | Requirement | Implementation | Status |
 |------------|----------------|--------|
-| **Data Sovereignty** | ZRS (transactional), GRS (archival - 📋 per PDF) | ✅ Compliant |
+| **Data Sovereignty** | ZRS (transactional), GRS (archival ) | ✅ Compliant |
 | **Network Security** | Private Endpoints (no public internet) | ✅ Compliant |
 | **Latency Target** | <50ms reads via 3 read replicas | ✅ Compliant |
 | **Encryption** | CMK + TLS 1.2+ for all data | ✅ Compliant |
