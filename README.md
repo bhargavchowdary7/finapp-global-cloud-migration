@@ -379,11 +379,22 @@ The `migration/storage-migration/Scripts/` folder contains modular helper script
 
 ---
 
-##  Azure DevOps Pipeline Variables
+## Azure DevOps Pipeline Configuration
 
-Configure the following variables in **Pipelines → Library → Variable Groups**:
+### Where to Add Azure DevOps Variables
 
-### Variable Group: `migration-config-production`
+Azure DevOps variables are **NOT** added in code files - they're configured in the **Azure DevOps Portal**.
+
+#### Location in Azure DevOps Portal:
+```
+Azure DevOps → Your Project → Pipelines → Library → Variable groups
+```
+
+---
+
+### Variable Groups Setup
+
+#### **Group 1: `migration-config-production`** (Non-sensitive configuration)
 
 | Variable Name | Example Value | Description |
 |--------------|---------------|-------------|
@@ -409,10 +420,14 @@ Configure the following variables in **Pipelines → Library → Variable Groups
 | `AZCOPY_CONCURRENCY` | `16` | Number of concurrent AzCopy transfers |
 | `VOLUME_CONFIG_PATH` | `migration/configs/volume-configs.json` | Path to volume configuration file |
 | `LOG_ANALYTICS_WORKSPACE_NAME` | `law-finapp-eastus2-prod` | Log Analytics workspace for monitoring |
-| `COOL_TIER_DAYS` | `90` | Days before moving to Cool storage tier |
-| `ARCHIVE_TIER_DAYS` | `365` | Days before moving to Archive storage tier |
+| **`COOL_TIER_DAYS`** | **`90`** | **📋 Days before moving to Cool storage tier (per PDF)** |
+| **`ARCHIVE_TIER_DAYS`** | **`365`** | **📋 Days before moving to Archive storage tier (per PDF)** |
 
-### Variable Group: `migration-secrets` (Mark as secret)
+---
+
+#### **Group 2: `migration-secrets`** (Sensitive - Link to Key Vault)
+
+**⚠️ IMPORTANT**: Enable "**Link secrets from an Azure key vault as variables**" and select your Key Vault
 
 | Variable Name | Description |
 |--------------|-------------|
@@ -424,10 +439,70 @@ Configure the following variables in **Pipelines → Library → Variable Groups
 | `SOURCE_DB_PASSWORD` | Source database admin password |
 | `POSTGRESQL_ADMIN_PASSWORD` | Azure PostgreSQL admin password |
 
-**Note**: All secrets above should be stored in Azure Key Vault and referenced via Key Vault secrets in the scripts. Pipeline variables should only contain Key Vault secret names, not actual credentials.
+**Best Practice**: All secrets above should be stored in Azure Key Vault and referenced via Key Vault-linked variables in Azure DevOps. Pipeline variables should only contain Key Vault secret names, not actual credentials.
 
 ---
 
+### How to Use Variable Groups in Azure Pipelines
+
+Add the variable groups at the **top of your pipeline YAML file** using the `variables` section:
+
+#### **Example 1: Infrastructure Pipeline** (`infrastructure/pipelines/infra-create.yml`)
+
+```yaml
+# infrastructure/pipelines/infra-create.yml
+
+trigger:
+  branches:
+    include:
+      - main
+      - develop
+
+# ✅ ADD VARIABLE GROUPS HERE
+variables:
+  - group: migration-config-production
+  - group: migration-secrets
+
+---
+
+###  Steps to Configure Variable Groups in Azure DevOps
+
+1. **Navigate to Variable Groups**:
+   ```
+   Azure DevOps → Your Project → Pipelines → Library
+   ```
+
+2. **Create Variable Group 1** (`migration-config-production`):
+   - Click **+ Variable group**
+   - Name: `migration-config-production`
+   - Add all non-sensitive variables listed above
+   - Click **Save**
+
+3. **Create Variable Group 2** (`migration-secrets`):
+   - Click **+ Variable group**
+   - Name: `migration-secrets`
+   - Enable **Link secrets from an Azure key vault as variables**
+   - Select your Azure Subscription
+   - Select your Key Vault name (e.g., `kv-migration-eastus2-abc123`)
+   - Click **Authorize** if prompted
+   - Add variables by selecting secrets from Key Vault:
+     - `AZURE_CLIENT_ID`
+     - `AZURE_CLIENT_SECRET`
+     - `NAS_USERNAME`
+     - `NAS_PASSWORD`
+     - `SOURCE_DB_USERNAME`
+     - `SOURCE_DB_PASSWORD`
+     - `POSTGRESQL_ADMIN_PASSWORD`
+   - Click **Save**
+
+4. **Use Variable Groups in Pipelines**:
+   - Add the following at the top of your pipeline YAML:
+     ```yaml
+     variables:
+       - group: migration-config-production
+       - group: migration-secrets
+     ```
+---
 ## 🚀 Deployment Instructions
 
 ### 1. Infrastructure Deployment (Terraform)

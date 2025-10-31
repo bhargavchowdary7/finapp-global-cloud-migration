@@ -17,7 +17,7 @@ variable "account_tier" {
 variable "replication_type" {
   description = "Storage account replication type"
   type        = string
-  default     = "ZRS"
+  default     = "GRS"
 }
 
 variable "subnet_id" {
