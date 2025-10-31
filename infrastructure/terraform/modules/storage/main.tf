@@ -4,7 +4,7 @@ resource "azurerm_storage_account" "main" {
   resource_group_name      = var.resource_group
   location                 = var.region
   account_tier             = var.account_tier
-  account_replication_type = var.replication_type
+  account_replication_type = "GRS"
   account_kind             = "StorageV2"
   min_tls_version          = "TLS1_2"
   
@@ -167,8 +167,8 @@ resource "azurerm_storage_management_policy" "main" {
     }
     actions {
       base_blob {
-        tier_to_cool_after_days_since_modification_greater_than = var.cool_tier_days
-        tier_to_archive_after_days_since_modification_greater_than = var.archive_tier_days
+        tier_to_cool_after_days_since_modification_greater_than = var.lifecycle_cool_tier_days
+        tier_to_archive_after_days_since_modification_greater_than = var.lifecycle_archive_tier_days
       }
     }
   }
@@ -183,7 +183,7 @@ resource "azurerm_storage_management_policy" "main" {
     }
     actions {
       base_blob {
-        tier_to_cool_after_days_since_modification_greater_than = var.cool_tier_days
+        tier_to_cool_after_days_since_modification_greater_than = var.lifecycle_cool_tier_days
       }
     }
   }
@@ -198,7 +198,7 @@ resource "azurerm_storage_management_policy" "main" {
     }
     actions {
       base_blob {
-        tier_to_archive_after_days_since_modification_greater_than = var.archive_tier_days
+        tier_to_archive_after_days_since_modification_greater_than = var.lifecycle_archive_tier_days
       }
     }
   }

@@ -31,13 +31,13 @@ variable "tags" {
   default     = {}
 }
 
-variable "cool_tier_days" {
+variable "lifecycle_cool_tier_days" {
   description = "Days before moving to Cool tier"
   type        = number
   default     = 90
 }
 
-variable "archive_tier_days" {
+variable "lifecycle_archive_tier_days" {
   description = "Days before moving to Archive tier"
   type        = number
   default     = 365
