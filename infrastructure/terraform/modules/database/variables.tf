@@ -13,10 +13,18 @@ variable "sku_name" {
   type        = string
 }
 
-variable "storage_mb" {
-  description = "Storage size in MB"
+variable "db_storage_mb" {
+  description = "Database storage size in MB (50TB = 52,428,800 MB for Premium SSD v2)"
   type        = number
+  default     = 52428800  # 50TB in MB
 }
+
+variable "db_storage_tier" {
+  description = "Storage tier for Premium SSD v2 (P1-P80)"
+  type        = string
+  default     = "P70"
+}
+
 
 variable "admin_username" {
   description = "PostgreSQL admin username"

@@ -5,33 +5,34 @@ cost_center = "9876"
 # Regions as specified : North America, Europe (UK), Asia (Singapore)
 regions = {
   north-america = {
-    region           = "East US 2"  # North America region
-    db_sku_name      = "GP_Standard_D16s_v3"  # For 50TB database performance
-    db_storage_mb    = 51200000  # 50 TB = 50 * 1024 * 1024 MB
-    db_version       = "13"
-    storage_account_tier = "Standard"  # For 100TB transaction logs storage
+    region           = "East US 2"
+    db_sku_name      = "GP_Standard_D16ds_v4"  #  v4 supports Premium SSD v2
+    db_storage_mb = 52428800  # 50TB in megabytes
+    db_storage_tier  = "P80"   #  Premium SSD v2 tier
+    db_version       = "16"    #  Use PostgreSQL 16 (latest stable)
+    storage_account_tier = "Premium"
     storage_replication_type = "ZRS"
-    
   }
   europe = {
-    region           = "UK South"  # Europe (UK) region as per PDF
-    db_sku_name      = "GP_Standard_D16s_v3"
-    db_storage_mb    = 51200000  # 50 TB
-    db_version       = "13"
-    storage_account_tier = "Standard"
+    region           = "UK South"
+    db_sku_name      = "GP_Standard_D16ds_v4"
+    db_storage_mb    = 52428800  # 50 TB
+    db_storage_tier  = "P80"
+    db_version       = "16"
+    storage_account_tier = "Premium"
     storage_replication_type = "ZRS"
-    
   }
   asia = {
-    region           = "Southeast Asia"  # Asia (Singapore) region as per PDF
-    db_sku_name      = "GP_Standard_D16s_v3"
-    db_storage_mb    = 51200000  # 50 TB
-    db_version       = "13"
-    storage_account_tier = "Standard"
+    region           = "Southeast Asia"
+    db_sku_name      = "GP_Standard_D16ds_v4"
+    db_storage_mb    = 52428800  # 50 TB
+    db_storage_tier  = "P80"
+    db_version       = "16"
+    storage_account_tier = "Premium"
     storage_replication_type = "ZRS"
-   
   }
 }
+
 
 
 existing_vnet_name = "finapp-vnet"

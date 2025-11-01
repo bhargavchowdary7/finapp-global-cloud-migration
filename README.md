@@ -23,6 +23,13 @@ This repository contains the complete infrastructure-as-code (Terraform) and mig
 
 #### Per-Region Resources (Deployed in 3 regions: East US 2, UK South, Southeast Asia)
 
+"I selected these specific Azure regions based on their alignment with the requirements:
+
+East US 2 for North America provides excellent connectivity and is Microsoft's primary East Coast region
+UK South ensures GDPR compliance for European data sovereignty requirements
+Southeast Asia maps directly to Singapore and ensures compliance with MAS (Monetary Authority of Singapore) regulations
+These regions each support availability zones for zone-redundant HA, which is critical for our RTO < 1 hour requirement."
+
 **1. Resource Group**
    - Purpose: Logical container for regional resources
    - Naming: rg-finapp-{region}-prod
@@ -30,7 +37,7 @@ This repository contains the complete infrastructure-as-code (Terraform) and mig
 
 **2. Azure Database for PostgreSQL Flexible Server**
    - SKU: GP_Standard_D16s_v3 (16 vCores, 64GB RAM, 20K IOPS)
-   - Storage: 16TB Premium SSD (max Azure limit)
+   - Storage: 50TB Premium SSD (max Azure limit)
    - HA Mode: Zone-Redundant (99.99% SLA)
    - Backup: 30-day retention, geo-redundant
    - Why: High-performance OLTP database for 50TB financial transactions with
@@ -202,7 +209,7 @@ This repository contains the complete infrastructure-as-code (Terraform) and mig
 │  │ Storage Account (ZRS for transactional data, GRS for archival)         
 │  │     ✓ Blob Private Endpoint                         │        │
 │  │     ✓ File Private Endpoint                         │        │
-│  │     ✓ Lifecycle Management (Cool: 30d, Archive: 90d)│        │
+│  │     ✓ Lifecycle Management (Cool: 90d, Archive: 365d)│       │
 │  └─────────────────────────────────────────────────────┘        │
 │                                                                 │
 │  ┌─────────────────────────────────────────────────────┐        │
@@ -685,6 +692,8 @@ terraform validate
 terraform plan -var-file="terraform.tfvars"
 
 # Apply infrastructure
+cd infrastructure/terraform
+terraform init
 terraform apply -var-file="terraform.tfvars" -auto-approve
 
 

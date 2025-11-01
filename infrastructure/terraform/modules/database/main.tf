@@ -6,7 +6,8 @@ resource "azurerm_postgresql_flexible_server" "main" {
   version                = var.db_version
   administrator_login    = var.admin_username
   administrator_password = var.admin_password
-  storage_mb             = var.storage_mb  # 50TB = 51200000 MB
+  storage_mb             = var.db_storage_mb      # Must be in MB: 52,428,800 MB = 50TB
+  storage_tier           = "P_80"                  # Premium SSD v2 tier
   sku_name               = var.sku_name    # High-performance SKU for 50TB
 
   # Zone Redundant HA for DR requirements (RTO < 1h, RPO < 5min)

@@ -102,7 +102,8 @@ module "database" {
   region          = each.value.region
   resource_group  = azurerm_resource_group.main[each.key].name
   sku_name        = each.value.db_sku_name
-  storage_mb      = each.value.db_storage_mb  # 50TB
+  db_storage_mb   = each.value.db_storage_mb   #  Pass from tfvars
+  db_storage_tier = each.value.db_storage_tier  #  Pass from tfvars
   db_version      = each.value.db_version
   admin_username  = var.admin_username
   admin_password  = random_password.postgresql_password.result
