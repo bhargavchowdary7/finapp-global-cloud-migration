@@ -34,7 +34,7 @@ resource "azurerm_storage_account" "main" {
   tags = var.tags
 }
 
-# ADD THESE CONTAINERS FOR THE PDF REQUIREMENTS
+# ADD THESE CONTAINERS FOR THE REQUIREMENTS
 resource "azurerm_storage_container" "dept_files_active" {
   name                  = "dept-files-active"
   storage_account_id    = azurerm_storage_account.main.id  # Use storage_account_id instead
@@ -157,7 +157,7 @@ resource "azurerm_private_endpoint" "file" {
 resource "azurerm_storage_management_policy" "main" {
   storage_account_id = azurerm_storage_account.main.id
 
-  # Rule for dept-files-active container (PDF Requirement)
+  # Rule for dept-files-active container ( Requirement)
   rule {
     name    = "DeptFilesActiveToCool"
     enabled = true

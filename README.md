@@ -39,7 +39,6 @@ These regions each support availability zones for zone-redundant HA, which is cr
    - SKU: GP_Standard_D16s_v3 (16 vCores, 64GB RAM, 20K IOPS)
    - Storage: 50TB Premium SSD (max Azure limit)
    - HA Mode: Zone-Redundant (99.99% SLA)
-   - Backup: 30-day retention, geo-redundant
    - Why: High-performance OLTP database for 50TB financial transactions with
          sub-50ms latency, zone-level disaster recovery (RTO < 1h, RPO < 5min)
          PostgreSQL Flexible Server with Zone-Redundant HA for sub-50ms latency and built-in DR (RTO <1hr, RPO <5min)
@@ -85,7 +84,7 @@ These regions each support availability zones for zone-redundant HA, which is cr
          Terraform for password rotation
 
 **9. Virtual Network (VNet)**
-   - Address Space: 10.{region-id}.0.0/16
+   - Address Space: 10.{region-id}.0.0/19
    - Subnets: database-subnet, storage-subnet, app-subnet
    - Why: Network isolation and private endpoint hosting
 
@@ -94,7 +93,7 @@ These regions each support availability zones for zone-redundant HA, which is cr
     - Storage NSG: Port 445 (SMB), 443 (HTTPS) from app-subnet
     - Why: Layer 4 firewall rules for defense-in-depth security
 
-### Use Case 2: Department Files Archive (Single Deployment)
+### Use Case 2: Department Files Archive 
 
 **11. Storage Account (Archive - Separate)**
     - Name: rg-deptfiles-prod-001
@@ -109,7 +108,7 @@ These regions each support availability zones for zone-redundant HA, which is cr
     - Service: Blob
     - Why: Secure access from on-premises via VPN/ExpressRoute
 
-### Global Resources (Single Deployment)
+### Global Resources 
 
 **13. Azure Monitor & Log Analytics Workspace**
     - Retention: 90 days
@@ -120,18 +119,14 @@ These regions each support availability zones for zone-redundant HA, which is cr
     - Purpose: Application performance monitoring (APM)
     - Why: Track API latency, transaction traces, dependency calls
 
-**15. Azure Automation Account**
-    - Purpose: DR validation, backup testing, compliance reporting
-    - Runbooks: Validate-DRReadiness.ps1, Backup-Verification.ps1
-    - Why: Automated operational validation and compliance checks
 
 ## Resource Selection Rationale
 
 **Why PostgreSQL over SQL Server?**
-- Open-source, lower licensing costs
 - Strong JSON/JSONB support for trading data
 - MVCC for high concurrency transaction processing
 - Better community support for cloud-native architectures
+- Open-source, lower licensing costs
 
 **Why ZRS over GRS for main application?**
 - Data sovereignty requirement: no cross-region replication
@@ -148,11 +143,6 @@ These regions each support availability zones for zone-redundant HA, which is cr
 - All traffic traverses Azure private backbone
 - Reduces attack surface for financial application
 
-**Why 16TB database (not 50TB)?**
-- Azure PostgreSQL Flexible Server maximum = 16TB
-- Architecture accommodates future sharding for scale beyond 16TB
-- Current 50TB on-premises likely includes indexes and redundant data that
-  can be optimized during migration
 
 ## Cost Optimization Strategies
 
@@ -160,13 +150,13 @@ These regions each support availability zones for zone-redundant HA, which is cr
 2. **Reserved Instances**: 3-year reserved capacity for database (up to 65% savings)
 3. **ZRS over GRS**: Lower cost while meeting sovereignty requirements
 4. **Right-sizing**: GP tier sufficient with Zone-Redundant HA (no BC tier needed)
-5. **Compression**: Enable PostgreSQL compression for 30-40% storage savings
+
 
 ## Compliance & Security
 
 - **GDPR**: UK South region, no cross-border data transfer
 - **MAS**: Southeast Asia (Singapore) data residency
-- **SOX**: East US 2 with audit logging, 30-day backup retention
+- **SOX**: East US 2 with audit logging.
 - **Encryption**: TLS 1.2 in-transit, AES-256 at-rest (all storage/databases)
 - **RBAC**: Azure AD integration, least-privilege access model
 - **Network**: Private endpoints only, NSG rules, no public IPs
@@ -220,97 +210,6 @@ These regions each support availability zones for zone-redundant HA, which is cr
 │  └─────────────────────────────────────────────────────┘        │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
-
-
-##  Repository Structure
-
-```
-finapp-global-cloud-migration/
-│
-├── infrastructure/
-│   ├── pipelines/
-│   │   ├── infra-create.yml           # Azure DevOps pipeline for infrastructure creation
-│   │   ├── infra-destroy.yml          # Azure DevOps pipeline for infrastructure destruction
-│   │   └── templates/
-│   │       └── terraform.yml          # Reusable Terraform template
-│   │
-│   └── terraform/
-│       ├── main.tf                    # Root configuration
-│       ├── variables.tf               # Global variables
-│       ├── terraform.tfvars           # Environment-specific values
-│       ├── providers.tf               # Azure provider configuration
-│       ├── backend.tf                 # Terraform state backend configuration
-│       ├── outputs.tf                 # Root outputs
-│       │
-│       └── modules/
-│           ├── storage/               # Storage Accounts with Private Endpoints
-│           │   ├── main.tf
-│           │   ├── variables.tf
-│           │   └── outputs.tf
-│           │
-│           ├── database/              # PostgreSQL Flexible Server + Read Replicas
-│           │   ├── main.tf
-│           │   ├── variables.tf
-│           │   └── outputs.tf
-│           │
-│           └── monitoring/            # Azure Monitor and Log Analytics
-│               ├── main.tf
-│               ├── variables.tf
-│               └── outputs.tf
-│
-└── migration/
-    ├── configs/
-    │   └── volume-configs.json        # Volume migration configurations
-    │
-    ├── database-migration/
-    │   ├── Database-Migration-WithKeyVault.ps1  # Secure DB migration with Key Vault
-    │   ├── Start-SecureDatabaseMigration.ps1    # Database migration orchestrator
-    │   └── Scripts/
-    │       ├── Get-MigrationSecrets.ps1         # Retrieve secrets from Key Vault
-    │       ├── Invoke-DataMigrationBatch.ps1    # Batch data migration
-    │       ├── Invoke-DataValidation.ps1        # Post-migration data validation
-    │       ├── Invoke-DatabaseAssessment.ps1    # Pre-migration database assessment
-    │       ├── Invoke-SchemaMigration.ps1       # Schema migration
-    │       ├── Invoke-SecureDatabaseMigration.ps1 # Secure database migration
-    │       ├── Test-KeyVaultSecrets.ps1         # Validate Key Vault access
-    │       └── Update-ApplicationConfig.ps1     # Update application configuration
-    │
-    ├── storage-migration/
-    │   ├── Start-SecureStorageMigration.ps1     # Storage migration orchestrator
-    │   ├── Storage-Migration-ByVolume.ps1       # Volume-based storage migration
-    │   └── Scripts/
-    │       ├── Apply-VolumeFilters.ps1          # Apply volume filtering rules
-    │       ├── Get-VolumeConfigurations.ps1     # Retrieve volume configurations
-    │       ├── Initialize-AzureFileSync.ps1     # Initialize Azure File Sync
-    │       ├── Invoke-AzCopyMigration.ps1       # AzCopy-based migration
-    │       ├── Invoke-DataBoxMigration.ps1      # Azure Data Box migration
-    │       ├── Invoke-SingleVolumeMigration.ps1 # Single volume migration
-    │       ├── Invoke-StorageValidation.ps1     # Post-migration storage validation
-    │       ├── New-MigrationDashboard.ps1       # Generate migration dashboard
-    │       ├── New-MigrationPlan.ps1            # Generate migration plan
-    │       ├── New-MigrationReport.ps1          # Generate migration report
-    │       ├── New-VolumeConfiguration.ps1      # Create volume configuration
-    │       ├── Show-VolumeSelection.ps1         # Interactive volume selection
-    │       ├── Start-VolumeMigrations.ps1       # Start volume migrations
-    │       └── Test-VolumeAccessibility.ps1     # Test volume accessibility
-    │
-    ├── pipelines/
-    │   ├── azure-pipelines-database-migration.yml  # Database migration pipeline
-    │   ├── azure-pipelines-storage-migration.yml   # Storage migration pipeline
-    │   └── templates/
-    │       ├── powershell-steps.yml              # Reusable PowerShell steps
-    │       └── terraform-steps.yml               # Reusable Terraform steps
-    │
-    └── terraform/
-        ├── main.tf                    # Migration infrastructure (temp VMs, etc.)
-        ├── variables.tf               # Migration-specific variables
-        ├── terraform.tfvars           # Migration environment values
-        ├── providers.tf               # Azure provider configuration
-        ├── backend.tf                 # Terraform state backend
-        └── outputs.tf                 # Migration infrastructure outputs
-```
-
----
 
 
 ---
@@ -410,6 +309,7 @@ storage_replication_type_archival      = "GRS"
 - Configures RBAC access policies
 
 ---
+
 
 ##  Migration Scripts (PowerShell)
 
@@ -748,6 +648,96 @@ cd migration
 5. **Migration Validation**: Always run validation tests using `Invoke-DataValidation.ps1` and `Invoke-StorageValidation.ps1` post-migration before decommissioning source systems.
 
 6. **Lifecycle Policy**: Storage lifecycle management is configured for **Cool tier at 90 days** and **Archive tier at 365 days** . This is defined in `infrastructure/terraform/modules/storage/main.tf`.
+
+---
+
+##  Repository Structure
+
+```
+finapp-global-cloud-migration/
+│
+├── infrastructure/
+│   ├── pipelines/
+│   │   ├── infra-create.yml           # Azure DevOps pipeline for infrastructure creation
+│   │   ├── infra-destroy.yml          # Azure DevOps pipeline for infrastructure destruction
+│   │   └── templates/
+│   │       └── terraform.yml          # Reusable Terraform template
+│   │
+│   └── terraform/
+│       ├── main.tf                    # Root configuration
+│       ├── variables.tf               # Global variables
+│       ├── terraform.tfvars           # Environment-specific values
+│       ├── providers.tf               # Azure provider configuration
+│       ├── backend.tf                 # Terraform state backend configuration
+│       ├── outputs.tf                 # Root outputs
+│       │
+│       └── modules/
+│           ├── storage/               # Storage Accounts with Private Endpoints
+│           │   ├── main.tf
+│           │   ├── variables.tf
+│           │   └── outputs.tf
+│           │
+│           ├── database/              # PostgreSQL Flexible Server + Read Replicas
+│           │   ├── main.tf
+│           │   ├── variables.tf
+│           │   └── outputs.tf
+│           │
+│           └── monitoring/            # Azure Monitor and Log Analytics
+│               ├── main.tf
+│               ├── variables.tf
+│               └── outputs.tf
+│
+└── migration/
+    ├── configs/
+    │   └── volume-configs.json        # Volume migration configurations
+    │
+    ├── database-migration/
+    │   ├── Database-Migration-WithKeyVault.ps1  # Secure DB migration with Key Vault
+    │   ├── Start-SecureDatabaseMigration.ps1    # Database migration orchestrator
+    │   └── Scripts/
+    │       ├── Get-MigrationSecrets.ps1         # Retrieve secrets from Key Vault
+    │       ├── Invoke-DataMigrationBatch.ps1    # Batch data migration
+    │       ├── Invoke-DataValidation.ps1        # Post-migration data validation
+    │       ├── Invoke-DatabaseAssessment.ps1    # Pre-migration database assessment
+    │       ├── Invoke-SchemaMigration.ps1       # Schema migration
+    │       ├── Invoke-SecureDatabaseMigration.ps1 # Secure database migration
+    │       ├── Test-KeyVaultSecrets.ps1         # Validate Key Vault access
+    │       └── Update-ApplicationConfig.ps1     # Update application configuration
+    │
+    ├── storage-migration/
+    │   ├── Start-SecureStorageMigration.ps1     # Storage migration orchestrator
+    │   ├── Storage-Migration-ByVolume.ps1       # Volume-based storage migration
+    │   └── Scripts/
+    │       ├── Apply-VolumeFilters.ps1          # Apply volume filtering rules
+    │       ├── Get-VolumeConfigurations.ps1     # Retrieve volume configurations
+    │       ├── Initialize-AzureFileSync.ps1     # Initialize Azure File Sync
+    │       ├── Invoke-AzCopyMigration.ps1       # AzCopy-based migration
+    │       ├── Invoke-DataBoxMigration.ps1      # Azure Data Box migration
+    │       ├── Invoke-SingleVolumeMigration.ps1 # Single volume migration
+    │       ├── Invoke-StorageValidation.ps1     # Post-migration storage validation
+    │       ├── New-MigrationDashboard.ps1       # Generate migration dashboard
+    │       ├── New-MigrationPlan.ps1            # Generate migration plan
+    │       ├── New-MigrationReport.ps1          # Generate migration report
+    │       ├── New-VolumeConfiguration.ps1      # Create volume configuration
+    │       ├── Show-VolumeSelection.ps1         # Interactive volume selection
+    │       ├── Start-VolumeMigrations.ps1       # Start volume migrations
+    │       └── Test-VolumeAccessibility.ps1     # Test volume accessibility
+    │
+    ├── pipelines/
+    │   ├── azure-pipelines-database-migration.yml  # Database migration pipeline
+    │   ├── azure-pipelines-storage-migration.yml   # Storage migration pipeline
+    │   └── templates/
+    │       ├── powershell-steps.yml              # Reusable PowerShell steps
+    │       └── terraform-steps.yml               # Reusable Terraform steps
+    │
+    └── terraform/
+        ├── main.tf                    # Migration infrastructure (temp VMs, etc.)
+        ├── variables.tf               # Migration-specific variables
+        ├── terraform.tfvars           # Migration environment values
+        ├── providers.tf               # Azure provider configuration
+        ├── backend.tf                 # Terraform state backend
+        └── outputs.tf                 # Migration infrastructure outputs
+```
 
 ---
 
