@@ -17,6 +17,163 @@ This repository contains the complete infrastructure-as-code (Terraform) and mig
 
 ---
 
+## Azure Resources Deployed
+
+### Use Case 1: Multi-Region Financial Application
+
+#### Per-Region Resources (Deployed in 3 regions: East US 2, UK South, Southeast Asia)
+
+**1. Resource Group**
+   - Purpose: Logical container for regional resources
+   - Naming: rg-finapp-{region}-prod
+   - Why: Enables regional isolation and independent lifecycle management
+
+**2. Azure Database for PostgreSQL Flexible Server**
+   - SKU: GP_Standard_D16s_v3 (16 vCores, 64GB RAM, 20K IOPS)
+   - Storage: 16TB Premium SSD (max Azure limit)
+   - HA Mode: Zone-Redundant (99.99% SLA)
+   - Backup: 30-day retention, geo-redundant
+   - Why: High-performance OLTP database for 50TB financial transactions with
+         sub-50ms latency, zone-level disaster recovery (RTO < 1h, RPO < 5min)
+         PostgreSQL Flexible Server with Zone-Redundant HA for sub-50ms latency and built-in DR (RTO <1hr, RPO <5min)
+
+**3. Storage Account (General Purpose v2)**
+   - Tier: Standard
+   - Replication: ZRS (Zone-Redundant Storage)
+   - Features: Blob versioning, change feed, soft delete
+   - Public Access: Disabled
+   - Why: 100TB transaction logs with data sovereignty compliance (no cross-region
+         replication), 99.9999999999% durability within region
+
+**4. File Shares (Azure Files Premium)**
+   - transaction-logs-share: 50TB quota
+   - archive-logs-share: 50TB quota
+   - Protocol: SMB 3.0 with encryption
+   - Why: High-throughput shared file storage for application servers, supports
+         legacy on-premises NAS migration path
+
+**5. Blob Storage Containers**
+   - dept-files-active: Hot tier
+   - dept-files-archive: Archive tier
+   - Lifecycle Policy: Move to Cool after 90 days, Archive after 365 days
+   - Why: Cost-optimized long-term retention with automated tiering
+
+**6. Private Endpoints (x4 per region)**
+   - Blob Storage Private Endpoint
+   - File Storage Private Endpoint
+   - PostgreSQL Private Endpoint
+   - Key Vault Private Endpoint
+   - Why: Zero public internet exposure, all traffic over private Azure backbone
+
+**7. Private DNS Zones**
+   - privatelink.postgres.database.azure.com
+   - privatelink.blob.core.windows.net
+   - privatelink.file.core.windows.net
+   - Why: Automatic DNS resolution for private endpoints
+
+**8. Azure Key Vault**
+   - SKU: Standard
+   - Secrets: PostgreSQL admin password, storage connection strings
+   - Why: Centralized secret management with audit logging, integrated with
+         Terraform for password rotation
+
+**9. Virtual Network (VNet)**
+   - Address Space: 10.{region-id}.0.0/16
+   - Subnets: database-subnet, storage-subnet, app-subnet
+   - Why: Network isolation and private endpoint hosting
+
+**10. Network Security Groups (NSGs)**
+    - Database NSG: Port 5432 from app-subnet only
+    - Storage NSG: Port 445 (SMB), 443 (HTTPS) from app-subnet
+    - Why: Layer 4 firewall rules for defense-in-depth security
+
+### Use Case 2: Department Files Archive (Single Deployment)
+
+**11. Storage Account (Archive - Separate)**
+    - Name: rg-deptfiles-prod-001
+    - Tier: Standard General Purpose v2
+    - Replication: GRS (Geo-Redundant Storage)
+    - Public Access: Disabled
+    - Tags: Environment=Production, Project=Research, CostCenter=9876
+    - Why: Separate storage for non-sensitive departmental files with geo-replication
+          for disaster recovery (different from financial data sovereignty requirement)
+
+**12. Private Endpoint (Archive Storage)**
+    - Service: Blob
+    - Why: Secure access from on-premises via VPN/ExpressRoute
+
+### Global Resources (Single Deployment)
+
+**13. Azure Monitor & Log Analytics Workspace**
+    - Retention: 90 days
+    - Metrics: Database CPU, Storage IOPS, Replication lag
+    - Why: Centralized monitoring, alerting for performance and availability
+
+**14. Azure Application Insights**
+    - Purpose: Application performance monitoring (APM)
+    - Why: Track API latency, transaction traces, dependency calls
+
+**15. Azure Automation Account**
+    - Purpose: DR validation, backup testing, compliance reporting
+    - Runbooks: Validate-DRReadiness.ps1, Backup-Verification.ps1
+    - Why: Automated operational validation and compliance checks
+
+## Resource Selection Rationale
+
+**Why PostgreSQL over SQL Server?**
+- Open-source, lower licensing costs
+- Strong JSON/JSONB support for trading data
+- MVCC for high concurrency transaction processing
+- Better community support for cloud-native architectures
+
+**Why ZRS over GRS for main application?**
+- Data sovereignty requirement: no cross-region replication
+- 3-AZ redundancy sufficient for RTO < 1h, RPO < 5min
+- GDPR, MAS, SOX compliance for regional data residency
+
+**Why GRS for department archive?**
+- Non-sensitive data allows geo-replication
+- Cost optimization through tiering (Cool/Archive)
+- Disaster recovery without sovereignty constraints
+
+**Why Private Endpoints everywhere?**
+- for  "zero public internet access"
+- All traffic traverses Azure private backbone
+- Reduces attack surface for financial application
+
+**Why 16TB database (not 50TB)?**
+- Azure PostgreSQL Flexible Server maximum = 16TB
+- Architecture accommodates future sharding for scale beyond 16TB
+- Current 50TB on-premises likely includes indexes and redundant data that
+  can be optimized during migration
+
+## Cost Optimization Strategies
+
+1. **Storage Lifecycle Policies**: Auto-tier to Cool (90d) and Archive (365d)
+2. **Reserved Instances**: 3-year reserved capacity for database (up to 65% savings)
+3. **ZRS over GRS**: Lower cost while meeting sovereignty requirements
+4. **Right-sizing**: GP tier sufficient with Zone-Redundant HA (no BC tier needed)
+5. **Compression**: Enable PostgreSQL compression for 30-40% storage savings
+
+## Compliance & Security
+
+- **GDPR**: UK South region, no cross-border data transfer
+- **MAS**: Southeast Asia (Singapore) data residency
+- **SOX**: East US 2 with audit logging, 30-day backup retention
+- **Encryption**: TLS 1.2 in-transit, AES-256 at-rest (all storage/databases)
+- **RBAC**: Azure AD integration, least-privilege access model
+- **Network**: Private endpoints only, NSG rules, no public IPs
+
+## Total Resource Count per Region
+
+- Compute: 1 PostgreSQL Flexible Server (HA mode = 2 nodes)
+- Storage: 2 Storage Accounts, 2 File Shares, 2 Blob Containers
+- Network: 1 VNet, 3 Subnets, 4 Private Endpoints, 3 Private DNS Zones, 2 NSGs
+- Security: 1 Key Vault
+- Monitoring: 1 Log Analytics Workspace (shared)
+
+**Total across 3 regions: 45+ Azure resources**
+
 ##  Architecture Overview
 
 
@@ -427,8 +584,8 @@ Azure DevOps → Your Project → Pipelines → Library → Variable groups
 | `AZCOPY_CONCURRENCY` | `16` | Number of concurrent AzCopy transfers |
 | `VOLUME_CONFIG_PATH` | `migration/configs/volume-configs.json` | Path to volume configuration file |
 | `LOG_ANALYTICS_WORKSPACE_NAME` | `law-finapp-eastus2-prod` | Log Analytics workspace for monitoring |
-| **`COOL_TIER_DAYS`** | **`90`** | **📋 Days before moving to Cool storage tier (per PDF)** |
-| **`ARCHIVE_TIER_DAYS`** | **`365`** | **📋 Days before moving to Archive storage tier (per PDF)** |
+| **`COOL_TIER_DAYS`** | **`90`** | **📋 Days before moving to Cool storage tier ** |
+| **`ARCHIVE_TIER_DAYS`** | **`365`** | **📋 Days before moving to Archive storage tier ** |
 
 ---
 
@@ -571,7 +728,7 @@ cd migration
 
 1. **📋 Data Sovereignty**: 
    - The `infrastructure/terraform/terraform.tfvars` file uses **ZRS** (Zone-Redundant Storage) for transactional storage accounts
-   - For the **File Share Archiving use case** (per PDF requirement), use **GRS** (Geo-Redundant Storage)
+   - For the **File Share Archiving use case** , use **GRS** (Geo-Redundant Storage)
 
 2. **Private Endpoints**: All database and storage traffic flows through private endpoints. Ensure NSG rules allow traffic from application subnets.
 

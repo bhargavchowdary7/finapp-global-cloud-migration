@@ -169,53 +169,6 @@ resource "azurerm_role_assignment" "key_vault_secrets_officer" {
   principal_id         = var.client_id
 }
 
-# Store SQL credentials in Key Vault (if SQL Server is created)
-resource "azurerm_key_vault_secret" "sql_admin_username" {
-  count        = var.create_key_vault && var.create_sql_server ? 1 : 0
-  name         = "sql-admin-username"
-  value        = var.sql_admin_username
-  key_vault_id = azurerm_key_vault.main[0].id
-
-  depends_on = [azurerm_role_assignment.key_vault_secrets_officer]
-}
-
-resource "azurerm_key_vault_secret" "sql_admin_password" {
-  count        = var.create_key_vault && var.create_sql_server ? 1 : 0
-  name         = "sql-admin-password"
-  value        = var.sql_admin_password
-  key_vault_id = azurerm_key_vault.main[0].id
-
-  depends_on = [azurerm_role_assignment.key_vault_secrets_officer]
-}
-
-# SQL Server (if required for database migration)
-resource "azurerm_mssql_server" "main" {
-  count                        = var.create_sql_server ? 1 : 0
-  name                         = "sql-${local.base_name}-${random_string.suffix.result}"
-  resource_group_name          = local.resource_group.name
-  location                     = local.resource_group.location
-  version                      = "12.0"
-  administrator_login          = var.sql_admin_username
-  administrator_login_password = var.sql_admin_password
-
-  azuread_administrator {
-    login_username = "AzureAD Admin"
-    object_id      = var.tenant_id
-  }
-
-  tags = local.common_tags
-}
-
-# SQL Database
-resource "azurerm_mssql_database" "main" {
-  count       = var.create_sql_server ? 1 : 0
-  name        = "sqldb-${local.base_name}"
-  server_id   = azurerm_mssql_server.main[0].id
-  sku_name    = "Basic"
-  max_size_gb = 2
-
-  tags = local.common_tags
-}
 
 # Storage Sync Service (for Azure File Sync)
 resource "azurerm_storage_sync" "main" {

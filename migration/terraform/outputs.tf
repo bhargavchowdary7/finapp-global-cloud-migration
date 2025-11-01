@@ -89,22 +89,6 @@ output "key_vault_uri" {
   value       = var.create_key_vault ? azurerm_key_vault.main[0].vault_uri : ""
 }
 
-# SQL Server Outputs (if created)
-output "sql_server_name" {
-  description = "The name of the SQL Server"
-  value       = var.create_sql_server ? azurerm_mssql_server.main[0].name : ""
-}
-
-output "sql_server_fqdn" {
-  description = "The fully qualified domain name of the SQL Server"
-  value       = var.create_sql_server ? azurerm_mssql_server.main[0].fully_qualified_domain_name : ""
-}
-
-output "sql_database_name" {
-  description = "The name of the SQL Database"
-  value       = var.create_sql_server ? azurerm_mssql_database.main[0].name : ""
-}
-
 # Storage Sync Outputs (if created)
 output "storage_sync_name" {
   description = "The name of the storage sync service"
@@ -163,7 +147,8 @@ output "migration_configuration" {
     resource_group       = local.resource_group.name
     location             = local.resource_group.location
     key_vault_name       = var.create_key_vault ? azurerm_key_vault.main[0].name : "Use existing Key Vault"
-    sql_server_name      = var.create_sql_server ? azurerm_mssql_server.main[0].name : "Use existing SQL Server"
+    postgresql_server = "Use PostgreSQL Flexible Server from infrastructure module"
+
   }
 }
 
