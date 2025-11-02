@@ -67,6 +67,7 @@ finapp-global-cloud-migration/
 #### Per-Region Resources (Deployed in 3 regions: East US 2, UK South, Southeast Asia)
 
 "I selected these specific Azure regions based on their alignment with the requirements:
+
 **Selected Regions:**
 
 | Region | Purpose | Compliance |
@@ -114,8 +115,6 @@ finapp-global-cloud-migration/
 
 ---
 
-
-## Resource Selection Rationale
 
 ##  Resource Selection Rationale
 
@@ -215,60 +214,60 @@ finapp-global-cloud-migration/
 
 ---
 
-## DR Architecture & Failover Plan
+# DR Architecture & Failover Plan
 
 Comprehensive disaster recovery strategy meeting RTO < 1 hour and RPO < 5 minutes
 
-# RTO (Recovery Time Objective) : < 1 Hour
+## RTO (Recovery Time Objective) : < 1 Hour
 - Zone-Redundant HA: Automatic failover in <120 seconds across availability zones
 - Read Replicas: Standby databases in separate zones ready for immediate promotion
 
-# RPO (Recovery Point Objective): < 5 Minutes
+## RPO (Recovery Point Objective): < 5 Minutes
 - Continuous WAL Backups: PostgreSQL Write-Ahead Logs replicated in <1 minute
 - ZRS Storage: Synchronous replication across 3 availability zones
 
-## Replication Mechanisms
+# Replication Mechanisms
 
-1. # Database Replication (PostgreSQL)
-    # Primary-Replica Architecture:
+1. ## Database Replication (PostgreSQL)
+   ### Primary-Replica Architecture:
       - Primary database in Availability Zone 1
       - Synchronous read replica in Availability Zone 2 (hot standby)
       - Synchronous read replica in Availability Zone 3 (hot standby)
       - All replicas can serve read traffic, reducing primary load
       - Write-Ahead Log (WAL) Streaming:
 
-    # Continuous WAL streaming from primary to replicas
+    ### Continuous WAL streaming from primary to replicas
       - Replication lag typically <100ms within same region
       - Automatic log archival to Azure Blob Storage (ZRS)
 
-    # Automated Backups:
+    ### Automated Backups:
       - Daily full backups retained for 7-35 days (configurable)
       - Transaction log backups every 5 minutes
       - Backup storage uses Zone-Redundant Storage (ZRS)
 
-2. # Storage Replication (Azure Storage)
-    # Zone-Redundant Storage (ZRS) for Financial Data:    
-      - Data synchronously replicated across 3 availability zones
-      - No cross-region replication (maintains data sovereignty)
-      - Protects against datacenter-level failures
-      - RPO effectively 0 seconds (synchronous replication)
+2. ## Storage Replication (Azure Storage)
+    ### Zone-Redundant Storage (ZRS) for Financial Data:    
+       - Data synchronously replicated across 3 availability zones
+       - No cross-region replication (maintains data sovereignty)
+       - Protects against datacenter-level failures
+       - RPO effectively 0 seconds (synchronous replication)
 
-    # Geo-Redundant Storage (GRS) for Department Files:  
+    ### Geo-Redundant Storage (GRS) for Department Files:  
       - Asynchronous replication to paired region (300+ miles away)
       - Only for non-regulated department archive files
       - RPO typically <15 minutes for cross-region replication
 
-3. # Network Redundancy
+3. ## Network Redundancy
       - Private endpoints deployed across multiple availability zones
       - Multiple Private DNS zones for automatic failover
       - Virtual network peering with redundant paths
 
-## Failover Procedures
+# Failover Procedures
 
- # Scenario 1: Single Availability Zone Failure:
+ ## Scenario 1: Single Availability Zone Failure:
  
  **Trigger:** Zone-level outage detected (compute, networking, or power failure)
- # Automatic Actions (0-120 seconds):
+ ### Automatic Actions (0-120 seconds):
    1. Azure health checks detect primary database unavailability
    2. Zone-Redundant HA automatically promotes replica in healthy zone
    3. Private endpoint DNS records updated to new primary IP
@@ -277,10 +276,10 @@ Comprehensive disaster recovery strategy meeting RTO < 1 hour and RPO < 5 minute
 
 **Data Loss:** None (synchronous replication)
 
-# Scenario 2 Complete Regional Outage: 
+## Scenario 2 Complete Regional Outage: 
 
 **trigger:** All availability zones in a region become unavailable
-# Manual Failover Procedure (15-45 minutes):
+### Manual Failover Procedure (15-45 minutes):
    1. Declare Disaster (0-5 min): Operations team confirms regional outage
    2. Execute DR Runbook (5-15 min):
       - Restore latest database backup in alternate region (North America → Europe or Asia)
@@ -291,16 +290,17 @@ Comprehensive disaster recovery strategy meeting RTO < 1 hour and RPO < 5 minute
    5. Resume Operations (35-45 min): Notify users, monitor performance
 **Expected Downtime:** 45-60 minutes (well within RTO <1h)
 **Data Loss:** <5 minutes of transactions (RPO met)
-# Data Sovereignty Note:
+
+### Data Sovereignty Note:
 Regional failover violates data sovereignty requirements. In practice, North America data would NEVER failover to Europe/Asia. Instead:
  - Restore from backups within the same region when recovered
  - Accept extended downtime if all zones fail (rare Azure SLA event)
  - Regional disasters are covered by Azure's 99.99% multi-zone SLA
 
- # Scenario 3 Data Corruption / Logical Failure
+ ## Scenario 3 Data Corruption / Logical Failure
 
  **Trigger:** Application bug, malicious activity, or accidental data deletion
-# Point-in-Time Recovery (10-30 minutes):
+### Point-in-Time Recovery (10-30 minutes):
    1. Identify timestamp of corruption event
    2. Initiate Point-in-Time Restore to moment before corruption
    3. Restore to new PostgreSQL instance (preserves original for forensics)
@@ -327,17 +327,17 @@ Regional failover violates data sovereignty requirements. In practice, North Ame
 
 **Critical Configurations**:
 
-# Lifecycle Management 
+## Lifecycle Management 
 lifecycle_cool_tier_days    = 90   # Move to Cool tier after 90 days
 lifecycle_archive_tier_days = 365  # Move to Archive tier after 365 days
 
-# Storage Replication
+## Storage Replication
  ZRS for transactional data (Data Sovereignty)
  GRS for archival data (File Share Archiving use case)
 storage_replication_type_transactional = "ZRS"
 storage_replication_type_archival      = "GRS" 
 
-# Read Replicas for Latency Optimization
+## Read Replicas for Latency Optimization
 - Primary DB: Availability Zone 1
 - Read Replica 1: Availability Zone 2
 - Read Replica 2: Availability Zone 3
