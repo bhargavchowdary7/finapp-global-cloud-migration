@@ -247,10 +247,10 @@ Comprehensive disaster recovery strategy meeting RTO < 1 hour and RPO < 5 minute
 
 2. ## Storage Replication (Azure Storage)
     ### Zone-Redundant Storage (ZRS) for Financial Data:    
-       - Data synchronously replicated across 3 availability zones
-       - No cross-region replication (maintains data sovereignty)
-       - Protects against datacenter-level failures
-       - RPO effectively 0 seconds (synchronous replication)
+      - Data synchronously replicated across 3 availability zones
+      - No cross-region replication (maintains data sovereignty)
+      - Protects against datacenter-level failures
+      - RPO effectively 0 seconds (synchronous replication)
 
     ### Geo-Redundant Storage (GRS) for Department Files:  
       - Asynchronous replication to paired region (300+ miles away)

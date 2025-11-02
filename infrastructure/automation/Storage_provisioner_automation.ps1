@@ -75,90 +75,93 @@ param(
 # CONFIGURATION
 # ============================================================================
 
-$ErrorActionPreference = "Stop"
-$WarningPreference = "Continue"
+$ErrorActionPreference = "Stop".                   # Stop script execution immediately on any error
+$WarningPreference = "Continue".                   # Display warnings but continue script execution
 
 # Standardized tags as per requirements
-$Tags = @{
-    Environment = "Production"
-    Project     = "Research"
-    CostCenter  = "9876"
-    ManagedBy   = "PowerShell-IaC"
-    CreatedDate = (Get-Date -Format "yyyy-MM-dd")
+$Tags = @{                                          # Define common Azure tags for governance and tracking
+    Environment = "Production"                      # Tag indicating environment type
+    Project     = "Research"                        # Tag indicating project name
+    CostCenter  = "9876"                            # Tag indicating cost center for billing    
+    ManagedBy   = "PowerShell-IaC"                  # Tag showing the resource was deployed via automation
+    CreatedDate = (Get-Date -Format "yyyy-MM-dd")   # Tag capturing the creation date of the deployment
 }
 
 # Container names
-$ContainerActive = "dept-files-active"
-$ContainerArchive = "dept-files-archive"
+$ContainerActive = "dept-files-active"              # Name for the active (hot) storage container
+$ContainerArchive = "dept-files-archive"            # Name for the archive (cold) storage container
 
 # Private Endpoint configuration
-$PrivateEndpointName = "pe-$StorageAccountName-blob"
-$PrivateDnsZoneName = "privatelink.blob.core.windows.net"
+$PrivateEndpointName = "pe-$StorageAccountName-blob"        # Name for the Private Endpoint resource
+$PrivateDnsZoneName = "privatelink.blob.core.windows.net"   # Default private DNS zone for Azure Blob Storage
 
-Write-Host "`n========================================" -ForegroundColor Cyan
-Write-Host "Storage Provisioner Automation" -ForegroundColor Cyan
-Write-Host "File Share Archiving - Secure IaC" -ForegroundColor Cyan
-Write-Host "========================================`n" -ForegroundColor Cyan
+Write-Host "`n========================================" -ForegroundColor Cyan  # Print visual separator line 
+Write-Host "Storage Provisioner Automation" -ForegroundColor Cyan              # Display script title
+Write-Host "File Share Archiving - Secure IaC" -ForegroundColor Cyan           # Display script description
+Write-Host "========================================`n" -ForegroundColor Cyan  # Print closing separator line
 
 # ============================================================================
 # STEP 1: VALIDATE PREREQUISITES
 # ============================================================================
+#This block is your “pre-flight check” — it verifies login, networking, and naming prerequisites before deploying anything, ensuring your Infrastructure-as-Code execution runs reliably and predictably.
 
-Write-Host "[1/8] Validating prerequisites..." -ForegroundColor Yellow
+Write-Host "[1/8] Validating prerequisites..." -ForegroundColor Yellow    # Display step header in yellow
 
 try {
     # Check Azure login
-    $context = Get-AzContext
+    $context = Get-AzContext                                             # Get current Azure session context
     if (-not $context) {
-        throw "Not logged into Azure. Run 'Connect-AzAccount' first."
+        throw "Not logged into Azure. Run 'Connect-AzAccount' first."   # Throw error if not logged in
     }
-    Write-Host "   Logged in as: $($context.Account.Id)" -ForegroundColor Green
-    Write-Host "   Subscription: $($context.Subscription.Name)" -ForegroundColor Green
+    Write-Host "   Logged in as: $($context.Account.Id)" -ForegroundColor Green    # Display logged-in account details
+    Write-Host "   Subscription: $($context.Subscription.Name)" -ForegroundColor Green  # Display subscription details
     
     # Validate VNet exists
-    $vnet = Get-AzVirtualNetwork -Name $VNetName -ResourceGroupName $VNetResourceGroup -ErrorAction SilentlyContinue
+    $vnet = Get-AzVirtualNetwork -Name $VNetName -ResourceGroupName $VNetResourceGroup -ErrorAction SilentlyContinue  # Get the specified VNet
     if (-not $vnet) {
-        throw "Virtual Network '$VNetName' not found in resource group '$VNetResourceGroup'"
+        throw "Virtual Network '$VNetName' not found in resource group '$VNetResourceGroup'"                         # Throw error if VNet not found
     }
-    Write-Host "   Virtual Network found: $VNetName" -ForegroundColor Green
+    Write-Host "   Virtual Network found: $VNetName" -ForegroundColor Green                             # Confirm VNet exists
     
     # Validate Subnet exists
-    $subnet = Get-AzVirtualNetworkSubnetConfig -VirtualNetwork $vnet -Name $SubnetName -ErrorAction SilentlyContinue
+    $subnet = Get-AzVirtualNetworkSubnetConfig -VirtualNetwork $vnet -Name $SubnetName -ErrorAction SilentlyContinue. # Get subnet from VNet
     if (-not $subnet) {
-        throw "Subnet '$SubnetName' not found in VNet '$VNetName'"
+        throw "Subnet '$SubnetName' not found in VNet '$VNetName'" # If subnet missing, throw error
     }
-    Write-Host "   Subnet found: $SubnetName" -ForegroundColor Green
+    Write-Host "   Subnet found: $SubnetName" -ForegroundColor Green  # Confirm subnet exists
     
     # Check storage account name availability
-    $nameAvailable = Get-AzStorageAccountNameAvailability -Name $StorageAccountName
+    $nameAvailable = Get-AzStorageAccountNameAvailability -Name $StorageAccountName   # Check if storage account name is available
     if (-not $nameAvailable.NameAvailable) {
-        throw "Storage account name '$StorageAccountName' is not available: $($nameAvailable.Reason)"
+        throw "Storage account name '$StorageAccountName' is not available: $($nameAvailable.Reason)" # Throw error if name is taken
     }
-    Write-Host "   Storage account name available: $StorageAccountName" -ForegroundColor Green
+    Write-Host "   Storage account name available: $StorageAccountName" -ForegroundColor Green  # Confirm name availability
     
 } catch {
-    Write-Error "Prerequisites validation failed: $_"
+    Write-Error "Prerequisites validation failed: $_".       # Log error message if validation fails and exit script with error code
     exit 1
 }
 
 # ============================================================================
 # STEP 2: CREATE RESOURCE GROUP
 # ============================================================================
+# This block validates and creates the Azure Resource Group that serves as the “home” for all your upcoming infrastructure — ensuring it’s properly tagged, region-aligned, and compliant before moving forward.
 
-Write-Host "`n[2/8] Creating Resource Group..." -ForegroundColor Yellow
+Write-Host "`n[2/8] Creating Resource Group..." -ForegroundColor Yellow   # Display step header in yellow
 
 try {
-    $rg = Get-AzResourceGroup -Name $ResourceGroupName -ErrorAction SilentlyContinue
+    $rg = Get-AzResourceGroup -Name $ResourceGroupName -ErrorAction SilentlyContinue. # Check if Resource Group already exists
     if ($rg) {
-        Write-Host "   Resource Group already exists: $ResourceGroupName" -ForegroundColor DarkYellow
+        Write-Host "   Resource Group already exists: $ResourceGroupName" -ForegroundColor DarkYellow # Notify if RG already exists
     } else {
-        $rg = New-AzResourceGroup -Name $ResourceGroupName -Location $Location -Tag $Tags
-        Write-Host "   Resource Group created: $ResourceGroupName" -ForegroundColor Green
+        $rg = New-AzResourceGroup -Name $ResourceGroupName -Location $Location -Tag $Tags   # Create new Resource Group with tags
+        Write-Host "   Resource Group created: $ResourceGroupName" -ForegroundColor Green   # Confirm RG creation success 
     }
-    Write-Host "   Location: $Location" -ForegroundColor Green
-    Write-Host "   Tags applied: Environment=$($Tags.Environment), Project=$($Tags.Project), CostCenter=$($Tags.CostCenter)" -ForegroundColor Green
+    Write-Host "   Location: $Location" -ForegroundColor Green ./.DS_Store                   # Display RG location details
+    
+    Write-Host "   Tags applied: Environment=$($Tags.Environment), Project=$($Tags.Project), CostCenter=$($Tags.CostCenter)" -ForegroundColor Green  # Display applied tags details 
 } catch {
-    Write-Error "Failed to create Resource Group: $_"
+    Write-Error "Failed to create Resource Group: $_"               # Log error message if RG creation fails and exit script with error code
     exit 1
 }
 
@@ -170,77 +173,79 @@ Write-Host "`n[3/8] Creating Storage Account (GRS, Public Access Disabled)..." -
 
 try {
     $storageParams = @{
-        ResourceGroupName      = $ResourceGroupName
-        Name                   = $StorageAccountName
-        Location               = $Location
-        SkuName               = "Standard_GRS"  # Geo-Redundant Storage for DR
-        Kind                  = "StorageV2"     # General-Purpose V2
-        AccessTier            = "Hot"           # Default access tier
-        AllowBlobPublicAccess = $false         # ✓ CRITICAL: Disable public access
-        PublicNetworkAccess   = "Disabled"     # ✓ CRITICAL: No public internet access
-        MinimumTlsVersion     = "TLS1_2"       # Enforce TLS 1.2+
-        EnableHttpsTrafficOnly = $true         # HTTPS only
+        ResourceGroupName      = $ResourceGroupName                 # Resource Group for the Storage Account
+        Name                   = $StorageAccountName                # Name of the Storage Account
+        Location               = $Location                          # Azure region for the Storage Account
+        SkuName               = "Standard_GRS"                      # Geo-Redundant Storage for DR
+        Kind                  = "StorageV2"                         # General-Purpose V2
+        AccessTier            = "Hot"                               # Default access tier
+        AllowBlobPublicAccess = $false                              #  CRITICAL: Disable public access
+        PublicNetworkAccess   = "Disabled"                          #  CRITICAL: No public internet access
+        MinimumTlsVersion     = "TLS1_2"                            # Enforce TLS 1.2+
+        EnableHttpsTrafficOnly = $true                              # HTTPS only
         Tag                   = $Tags
     }
     
-    $storageAccount = New-AzStorageAccount @storageParams
-    Write-Host "   Storage Account created: $StorageAccountName" -ForegroundColor Green
-    Write-Host "   SKU: Standard_GRS (Geo-Redundant)" -ForegroundColor Green
-    Write-Host "   Public Network Access: Disabled ✓" -ForegroundColor Green
-    Write-Host "   Allow Blob Public Access: Disabled ✓" -ForegroundColor Green
-    Write-Host "   HTTPS Only: Enabled ✓" -ForegroundColor Green
+    $storageAccount = New-AzStorageAccount @storageParams  # Create the Storage Account with specified parameters
+    Write-Host "   Storage Account created: $StorageAccountName" -ForegroundColor Green  # Confirm Storage Account creation success
+    Write-Host "   SKU: Standard_GRS (Geo-Redundant)" -ForegroundColor Green             # Display SKU details
+    Write-Host "   Public Network Access: Disabled " -ForegroundColor Green              # Confirm public network access is disabled
+    Write-Host "   Allow Blob Public Access: Disabled " -ForegroundColor Green           # Confirm blob public access is disabled       
+    Write-Host "   HTTPS Only: Enabled " -ForegroundColor Green
     
     # Get storage context
-    $ctx = $storageAccount.Context
+    $ctx = $storageAccount.Context               # Retrieve the storage context for further operations
     
 } catch {
-    Write-Error "Failed to create Storage Account: $_"
+    Write-Error "Failed to create Storage Account: $_"   # Log error message if Storage Account creation fails and exit script with error code
     exit 1
 }
 
 # ============================================================================
 # STEP 4: CREATE BLOB CONTAINERS
 # ============================================================================
+# This block securely creates two blob containers — one for active files and another for archived files — with no public access, forming the foundation for lifecycle-based storage automation in the following steps.
 
 Write-Host "`n[4/8] Creating Blob Containers..." -ForegroundColor Yellow
 
 try {
     # Create dept-files-active container
-    $containerActiveParams = @{
-        Name    = $ContainerActive
-        Context = $ctx
-        Permission = "Off"  # No public access
+    $containerActiveParams = @{                             # Parameters for creating the active container
+        Name    = $ContainerActive                          # Name of the active container
+        Context = $ctx                                      # Storage context
+        Permission = "Off"                                  # No public access
     }
-    New-AzStorageContainer @containerActiveParams | Out-Null
+    New-AzStorageContainer @containerActiveParams | Out-Null            # Create the active container
     Write-Host "   Container created: $ContainerActive (Public Access: Off)" -ForegroundColor Green
     
     # Create dept-files-archive container
-    $containerArchiveParams = @{
-        Name    = $ContainerArchive
+    $containerArchiveParams = @{                         # Parameters for creating the archive container
+        Name    = $ContainerArchive                      # Name of the archive container               
         Context = $ctx
-        Permission = "Off"  # No public access
+        Permission = "Off"                              # No public access
     }
-    New-AzStorageContainer @containerArchiveParams | Out-Null
-    Write-Host "   Container created: $ContainerArchive (Public Access: Off)" -ForegroundColor Green
+    New-AzStorageContainer @containerArchiveParams | Out-Null          # Create the archive container
+    Write-Host "   Container created: $ContainerArchive (Public Access: Off)" -ForegroundColor Green    # Confirm archive container creation success
     
 } catch {
-    Write-Error "Failed to create containers: $_"
+    Write-Error "Failed to create containers: $_"                               # Log error message if container creation fails and exit script with error code
     exit 1
 }
 
 # ============================================================================
 # STEP 5: CONFIGURE LIFECYCLE MANAGEMENT POLICY
 # ============================================================================
+#This block sets up an automated cost-saving rule that moves inactive files from Hot → Cool → Archive storage over time — ensuring that your cloud storage remains efficient, secure, and compliant without manual maintenance.
 
 Write-Host "`n[5/8] Configuring Lifecycle Management Policy..." -ForegroundColor Yellow
 
 try {
     # Define lifecycle rule for dept-files-active
-    $rule = [PSCustomObject]@{
-        name    = "MoveToArchiveTiers"
+    $rule = [PSCustomObject]@{                                      # Lifecycle rule definition
+        name    = "MoveToArchiveTiers"                               # Rule name
         enabled = $true
         type    = "Lifecycle"
-        definition = [PSCustomObject]@{
+        definition = [PSCustomObject]@{                             
             filters = [PSCustomObject]@{
                 blobTypes = @("blockBlob")
                 prefixMatch = @("$ContainerActive/")
@@ -282,6 +287,8 @@ try {
 # ============================================================================
 # STEP 6: DISABLE PRIVATE ENDPOINT NETWORK POLICIES ON SUBNET
 # ============================================================================
+#This section ensures that the subnet you’re using for Private Endpoints is properly configured to allow Private Link traffic.
+#Azure requires that any subnet hosting private endpoints must have network policies disabled — otherwise, endpoint creation or traffic flow can fail.
 
 Write-Host "`n[6/8] Configuring Subnet for Private Endpoint..." -ForegroundColor Yellow
 
@@ -305,13 +312,13 @@ Write-Host "`n[7/8] Creating Private Endpoint for Blob Service..." -ForegroundCo
 
 try {
     # Create Private Link Service Connection
-    $privateLinkConnection = New-AzPrivateLinkServiceConnection `
-        -Name "$PrivateEndpointName-connection" `
-        -PrivateLinkServiceId $storageAccount.Id `
+    $privateLinkConnection = New-AzPrivateLinkServiceConnection `  # Create the connection object for the private endpoint
+        -Name "$PrivateEndpointName-connection" `                   # Name of the connection
+        -PrivateLinkServiceId $storageAccount.Id `                 # ID of the storage account
         -GroupId "blob"
     
     # Create Private Endpoint
-    $privateEndpoint = New-AzPrivateEndpoint `
+    $privateEndpoint = New-AzPrivateEndpoint `                  # Create the private endpoint resource
         -ResourceGroupName $ResourceGroupName `
         -Name $PrivateEndpointName `
         -Location $Location `
@@ -331,6 +338,7 @@ try {
 # ============================================================================
 # STEP 8: CONFIGURE PRIVATE DNS ZONE (Optional but Recommended)
 # ============================================================================
+#This block guarantees that your storage account’s DNS name resolves to its private endpoint IP, making all blob traffic stay inside your Azure VNet — fully secure, compliant, and isolated from the public internet.
 
 Write-Host "`n[8/8] Configuring Private DNS Zone..." -ForegroundColor Yellow
 
@@ -392,6 +400,7 @@ try {
 # ============================================================================
 # DEPLOYMENT SUMMARY
 # ============================================================================
+#This block prints a clean, color-coded summary of everything the script created and configured — including resource names, security settings, cost policies, and compliance tags.
 
 Write-Host "`n========================================" -ForegroundColor Cyan
 Write-Host "DEPLOYMENT COMPLETED SUCCESSFULLY" -ForegroundColor Green
@@ -428,6 +437,8 @@ Write-Host "  4. Monitor lifecycle policy execution in Azure Portal" -Foreground
 Write-Host "`n========================================`n" -ForegroundColor Cyan
 
 # Export deployment information
+#This block acts as a deployment report card — confirming that your Azure storage environment was created successfully, securely, and in full compliance with organizational policies, while also guiding you on what to verify next.
+
 $deploymentInfo = @{
     Timestamp          = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
     ResourceGroup      = $ResourceGroupName

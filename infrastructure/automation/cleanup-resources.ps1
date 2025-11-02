@@ -142,7 +142,7 @@ try {
 
 if (-not $Force) {
     Write-Host "`n========================================" -ForegroundColor Red
-    Write-Host "⚠ CONFIRMATION REQUIRED ⚠" -ForegroundColor Red
+    Write-Host " CONFIRMATION REQUIRED ⚠" -ForegroundColor Red
     Write-Host "========================================" -ForegroundColor Red
     
     Write-Host "`nYou are about to DELETE:" -ForegroundColor White
@@ -174,6 +174,7 @@ if (-not $Force) {
 # ============================================================================
 # STEP 4: DELETE STORAGE ACCOUNTS (WITH SOFT DELETE CHECK)
 # ============================================================================
+# This block is the pre-deletion audit and verification step — it checks that each storage account is safe to remove, identifies recovery options (soft delete), and lists all containers for visibility before permanent deletion happens.
 
 Write-Host "`n[3/5] Preparing Storage Accounts for deletion..." -ForegroundColor Yellow
 
@@ -213,6 +214,7 @@ if ($storageAccounts) {
 # ============================================================================
 # STEP 5: DELETE RESOURCE GROUP
 # ============================================================================
+#This block safely deletes the entire Resource Group (and everything inside it) while keeping the operator informed in real time, verifying that all resources are gone, and logging how long the cleanup took.
 
 Write-Host "`n[4/5] Deleting Resource Group and all resources..." -ForegroundColor Yellow
 
@@ -268,6 +270,7 @@ try {
 # ============================================================================
 # STEP 6: CLEANUP DNS RESOURCES (OPTIONAL)
 # ============================================================================
+#This block ensures your Azure environment is clean, accurate, and auditable after resource deletion — while keeping shared DNS zones safe and compliant.
 
 if ($DeleteDnsResources -and $VNetResourceGroup) {
     Write-Host "`n[5/5] Cleaning up Private DNS resources..." -ForegroundColor Yellow
