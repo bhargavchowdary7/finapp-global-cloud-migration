@@ -2,7 +2,10 @@
 
 ##  Overview
 
-This repository contains the complete infrastructure-as-code (Terraform) and migration scripts (PowerShell) for migrating FinApp's global financial services application to Microsoft Azure with strict **data sovereignty compliance** and **sub-50ms latency optimization**.
+This repository contains the complete infrastructure-as-code (Terraform), and migration scripts (PowerShell) for migrating FinApp's global financial services application to Microsoft Azure with strict **data sovereignty compliance** and **sub-50ms latency optimization** and provides two PowerShell scripts that implement a complete lifecycle for secure Azure Storage infrastructure:
+1. **Storage_provisioner_automation.ps1** - Provisions all secured infrastructure components
+2. **Cleanup-Resources.ps1** - Safely removes all provisioned resources
+The solution implements **Zero Trust architecture** with private endpoints only, automated tiering policies, and comprehensive audit trails.
 
 ---
 
@@ -15,6 +18,46 @@ This repository contains the complete infrastructure-as-code (Terraform) and mig
 ✅ **Security**: Azure Key Vault integration with managed identities  
 ✅ **Compliance**: Customer-managed encryption keys (CMK) for all data
 
+---
+##  Repository Structure
+
+```
+finapp-global-cloud-migration/
+   └── infrastructure/
+      ├── automation/
+      │   ├── storage_provisioner_automation.ps1   
+      │   └── cleanup-resources.ps1
+      ├── pipelines/
+      │   ├── infra-create.yml           # Azure DevOps pipeline for infrastructure creation
+      │   ├── infra-destroy.yml          # Azure DevOps pipeline for infrastructure destruction
+      │   └── templates/
+      │       └── terraform.yml          # Reusable Terraform template
+      │
+      └── terraform/
+          ├── main.tf                    # Root configuration
+          ├── variables.tf               # Global variables
+          ├── terraform.tfvars           # Environment-specific values
+          ├── providers.tf               # Azure provider configuration
+          ├── backend.tf                 # Terraform state backend configuration
+          ├── outputs.tf                 # Root outputs
+          │
+          └── modules/
+              ├── storage/               # Storage Accounts with Private Endpoints
+              │   ├── main.tf
+              │   ├── variables.tf
+              │   └── outputs.tf
+              │
+              ├── database/              # PostgreSQL Flexible Server + Read Replicas
+              │   ├── main.tf
+              │   ├── variables.tf
+              │   └── outputs.tf
+              │
+              └── monitoring/            # Azure Monitor and Log Analytics
+                  ├── main.tf
+                  ├── variables.tf
+                  └── outputs.tf
+
+```
 ---
 
 ## Azure Resources Deployed
@@ -214,6 +257,102 @@ These regions each support availability zones for zone-redundant HA, which is cr
 
 ---
 
+## DR Architecture & Failover Plan
+
+Comprehensive disaster recovery strategy meeting RTO < 1 hour and RPO < 5 minutes
+
+# RTO (Recovery Time Objective) : < 1 Hour
+- Zone-Redundant HA: Automatic failover in <120 seconds across availability zones
+- Read Replicas: Standby databases in separate zones ready for immediate promotion
+
+# RPO (Recovery Point Objective): < 5 Minutes
+- Continuous WAL Backups: PostgreSQL Write-Ahead Logs replicated in <1 minute
+- ZRS Storage: Synchronous replication across 3 availability zones
+
+## Replication Mechanisms
+
+1. # Database Replication (PostgreSQL)
+    # Primary-Replica Architecture:
+      - Primary database in Availability Zone 1
+      - Synchronous read replica in Availability Zone 2 (hot standby)
+      - Synchronous read replica in Availability Zone 3 (hot standby)
+      - All replicas can serve read traffic, reducing primary load
+      - Write-Ahead Log (WAL) Streaming:
+
+    # Continuous WAL streaming from primary to replicas
+      - Replication lag typically <100ms within same region
+      - Automatic log archival to Azure Blob Storage (ZRS)
+
+    # Automated Backups:
+      - Daily full backups retained for 7-35 days (configurable)
+      - Transaction log backups every 5 minutes
+      - Backup storage uses Zone-Redundant Storage (ZRS)
+
+2. # Storage Replication (Azure Storage)
+    # Zone-Redundant Storage (ZRS) for Financial Data:    
+      - Data synchronously replicated across 3 availability zones
+      - No cross-region replication (maintains data sovereignty)
+      - Protects against datacenter-level failures
+      - RPO effectively 0 seconds (synchronous replication)
+
+    # Geo-Redundant Storage (GRS) for Department Files:  
+      - Asynchronous replication to paired region (300+ miles away)
+      - Only for non-regulated department archive files
+      - RPO typically <15 minutes for cross-region replication
+
+3. # Network Redundancy
+      - Private endpoints deployed across multiple availability zones
+      - Multiple Private DNS zones for automatic failover
+      - Virtual network peering with redundant paths
+
+## Failover Procedures
+
+ # Scenario 1: Single Availability Zone Failure:
+ 
+ **Trigger:** Zone-level outage detected (compute, networking, or power failure)
+ # Automatic Actions (0-120 seconds):
+   1. Azure health checks detect primary database unavailability
+   2. Zone-Redundant HA automatically promotes replica in healthy zone
+   3. Private endpoint DNS records updated to new primary IP
+   4. Application connections automatically re-establish to new primary
+   5. Expected Downtime: <120 seconds
+
+**Data Loss:** None (synchronous replication)
+
+# Scenario 2 Complete Regional Outage: 
+
+**trigger:** All availability zones in a region become unavailable
+# Manual Failover Procedure (15-45 minutes):
+   1. Declare Disaster (0-5 min): Operations team confirms regional outage
+   2. Execute DR Runbook (5-15 min):
+      - Restore latest database backup in alternate region (North America → Europe or Asia)
+      - Restore Point-in-Time to latest available transaction log
+      - Deploy application tier to alternate region using Infrastructure-as-Code
+   3. DNS Failover (15-20 min): Update Traffic Manager to route to alternate region
+   4. Validation (20-35 min): Run DR validation scripts, verify data integrity
+   5. Resume Operations (35-45 min): Notify users, monitor performance
+**Expected Downtime:** 45-60 minutes (well within RTO <1h)
+**Data Loss:** <5 minutes of transactions (RPO met)
+# Data Sovereignty Note:
+Regional failover violates data sovereignty requirements. In practice, North America data would NEVER failover to Europe/Asia. Instead:
+ - Restore from backups within the same region when recovered
+ - Accept extended downtime if all zones fail (rare Azure SLA event)
+ - Regional disasters are covered by Azure's 99.99% multi-zone SLA
+
+ # Scenario 3 Data Corruption / Logical Failure
+
+ **Trigger:** Application bug, malicious activity, or accidental data deletion
+# Point-in-Time Recovery (10-30 minutes):
+   1. Identify timestamp of corruption event
+   2. Initiate Point-in-Time Restore to moment before corruption
+   3. Restore to new PostgreSQL instance (preserves original for forensics)
+   4. Validate restored data, switch application connection strings
+   5. Expected Downtime: 10-30 minutes
+
+**Data Loss:** None (restores to exact point in time)
+
+----
+
 ##  Infrastructure Scripts (Terraform)
 
 ### `infrastructure/terraform/main.tf`
@@ -341,8 +480,12 @@ storage_replication_type_archival      = "GRS"
     -TargetDbSecretName "azure-postgresql-connection" `
     -DatabaseName "finapp_production"
 
-
+```
 ---
+
+## Migration Scripts (PowerShell)
+
+### Database Migration Scripts
 
 #### `migration/database-migration/Start-SecureDatabaseMigration.ps1`
 
@@ -406,8 +549,9 @@ The `migration/database-migration/Scripts/` folder contains modular helper scrip
     -StorageAccountName "stfinappeastus2abc123" `
     -ContainerName "transaction-logs"
 
-
+```
 ---
+### Storage Migration
 
 #### `migration/storage-migration/Storage-Migration-ByVolume.ps1`
 
@@ -498,7 +642,7 @@ Azure DevOps → Your Project → Pipelines → Library → Variable groups
 
 #### **Group 2: `migration-secrets`** (Sensitive - Link to Key Vault)
 
-**⚠️ IMPORTANT**: Enable "**Link secrets from an Azure key vault as variables**" and select your Key Vault
+**IMPORTANT**: Enable "**Link secrets from an Azure key vault as variables**" and select your Key Vault
 
 | Variable Name | Description |
 |--------------|-------------|
@@ -534,6 +678,7 @@ variables:
   - group: migration-config-production
   - group: migration-secrets
 
+```
 ---
 
 ###  Steps to Configure Variable Groups in Azure DevOps
@@ -635,7 +780,7 @@ cd migration
 
 ## Important Notes
 
-1. **📋 Data Sovereignty**: 
+1. ** Data Sovereignty**: 
    - The `infrastructure/terraform/terraform.tfvars` file uses **ZRS** (Zone-Redundant Storage) for transactional storage accounts
    - For the **File Share Archiving use case** , use **GRS** (Geo-Redundant Storage)
 
@@ -651,12 +796,15 @@ cd migration
 
 ---
 
-##  Repository Structure
+##  Complete Repository Structure
 
 ```
 finapp-global-cloud-migration/
 │
 ├── infrastructure/
+|   ├── automation/
+|   │   ├── storage_provisioner_automation.ps1   
+|   │   └── cleanup-resources.ps1
 │   ├── pipelines/
 │   │   ├── infra-create.yml           # Azure DevOps pipeline for infrastructure creation
 │   │   ├── infra-destroy.yml          # Azure DevOps pipeline for infrastructure destruction
@@ -749,5 +897,120 @@ finapp-global-cloud-migration/
 - [Azure Key Vault Best Practices](https://learn.microsoft.com/en-us/azure/key-vault/general/best-practices)
 - [Terraform Azure Provider](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs)
 
+```
 ---
 
+## 🏗️ Azure Resources Deployed
+
+### Regional Deployment Strategy
+
+**Selected Regions:**
+
+| Region | Purpose | Compliance |
+|--------|---------|-----------|
+| **East US 2** | North America (Primary) | SOX compliance |
+| **UK South** | Europe | GDPR compliance |
+| **Southeast Asia** | Singapore | MAS compliance |
+
+> These regions support availability zones for zone-redundant high availability, meeting RTO < 1 hour requirements.
+
+---
+
+### Per-Region Resources (3 Regions)
+
+| # | Resource | Configuration | Purpose |
+|---|----------|--------------|---------|
+| **1** | **Resource Group** | `rg-finapp-{region}-prod` | Logical container for regional resources, enables independent lifecycle management |
+| **2** | **PostgreSQL Flexible Server** | SKU: GP_Standard_D16s_v3<br>Storage: 50TB Premium SSD<br>HA: Zone-Redundant | High-performance OLTP database (20K IOPS)<br>Sub-50ms latency, zone-level DR (RTO <1hr, RPO <5min) |
+| **3** | **Storage Account (Transactional)** | Tier: Standard<br>Replication: ZRS<br>Public Access: Disabled | 100TB transaction logs with data sovereignty<br>99.9999999999% durability within region |
+| **4** | **File Shares (Premium)** | `transaction-logs-share`: 50TB<br>`archive-logs-share`: 50TB<br>Protocol: SMB 3.0 | High-throughput shared storage<br>Legacy NAS migration path |
+| **5** | **Blob Containers** | `dept-files-active`: Hot tier<br>`dept-files-archive`: Archive tier<br>Lifecycle: Cool@90d, Archive@365d | Cost-optimized long-term retention<br>Automated tiering |
+| **6** | **Private Endpoints** | 4 per region:<br>• Blob Storage<br>• File Storage<br>• PostgreSQL<br>• Key Vault | Zero public internet exposure<br>All traffic over private Azure backbone |
+| **7** | **Private DNS Zones** | • privatelink.postgres.database.azure.com<br>• privatelink.blob.core.windows.net<br>• privatelink.file.core.windows.net | Automatic DNS resolution for private endpoints |
+| **8** | **Azure Key Vault** | SKU: Standard<br>Secrets: DB passwords, connection strings | Centralized secret management with audit logging |
+| **9** | **Virtual Network** | Address: 10.{region-id}.0.0/19<br>Subnets: database, storage, app | Network isolation and private endpoint hosting |
+| **10** | **Network Security Groups** | Database NSG: Port 5432<br>Storage NSG: Port 445, 443 | Layer 4 firewall rules (defense-in-depth) |
+
+---
+
+### Department Files Archive (Separate Use Case)
+
+| # | Resource | Configuration | Purpose |
+|---|----------|--------------|---------|
+| **11** | **Storage Account (Archive)** | Name: `rg-deptfiles-prod-001`<br>Tier: Standard GRS<br>Public Access: Disabled<br>Tags: Environment=Production, Project=Research, CostCenter=9876 | Departmental files with geo-replication for DR<br>(Different from financial data sovereignty) |
+| **12** | **Private Endpoint (Archive)** | Service: Blob | Secure access from on-premises via VPN/ExpressRoute |
+
+---
+
+### Global Resources (Shared)
+
+| # | Resource | Configuration | Purpose |
+|---|----------|--------------|---------|
+| **13** | **Azure Monitor & Log Analytics** | Retention: 90 days<br>Metrics: DB CPU, Storage IOPS, Replication lag | Centralized monitoring and alerting |
+| **14** | **Application Insights** | APM enabled | Track API latency, transaction traces, dependencies |
+
+---
+
+### Total Resource Count Summary
+
+| Category | Count per Region | Description |
+|----------|-----------------|-------------|
+| **Compute** | 1 | PostgreSQL Flexible Server (HA mode = 2 nodes) |
+| **Storage** | 2 | Storage Accounts |
+| **Storage** | 2 | File Shares |
+| **Storage** | 2 | Blob Containers |
+| **Network** | 1 | Virtual Network |
+| **Network** | 3 | Subnets |
+| **Network** | 4 | Private Endpoints |
+| **Network** | 3 | Private DNS Zones |
+| **Network** | 2 | Network Security Groups |
+| **Security** | 1 | Key Vault |
+| **Monitoring** | 1 | Log Analytics Workspace (shared) |
+| **TOTAL** | **45+** | **Across 3 regions** |
+
+---
+
+## 🔍 Resource Selection Rationale
+
+| Decision | Rationale |
+|----------|-----------|
+| **PostgreSQL over SQL Server** | • Strong JSON/JSONB support for trading data<br>• MVCC for high concurrency transaction processing<br>• Better cloud-native support<br>• Open-source, lower licensing costs |
+| **ZRS over GRS (Main App)** | • Data sovereignty requirement: no cross-region replication<br>• 3-AZ redundancy sufficient for RTO < 1h, RPO < 5min<br>• GDPR, MAS, SOX compliance for regional data residency |
+| **GRS for Department Archive** | • Non-sensitive data allows geo-replication<br>• Cost optimization through tiering (Cool/Archive)<br>• Disaster recovery without sovereignty constraints |
+| **Private Endpoints Everywhere** | • Zero public internet access requirement<br>• All traffic traverses Azure private backbone<br>• Reduces attack surface for financial application |
+| **Read Replicas (3 AZs)** | • Distributes read load across availability zones<br>• Achieves <50ms read latency target<br>• Automatic failover for high availability |
+
+---
+
+## 💰 Cost Optimization Strategies
+
+| Strategy | Implementation | Savings |
+|----------|---------------|---------|
+| **Storage Lifecycle Policies** | Auto-tier to Cool (90d) and Archive (365d) | Up to 89% for archived data |
+| **Reserved Instances** | 3-year reserved capacity for database | Up to 65% savings |
+| **ZRS over GRS** | Regional replication only (where compliant) | ~40% lower storage costs |
+| **Right-sizing** | GP tier with Zone-Redundant HA (no BC tier) | Optimal performance/cost ratio |
+
+**Example Cost Breakdown:**
+
+| Storage Tier | Cost per TB/Month | Savings vs Hot Tier |
+|--------------|-------------------|---------------------|
+| **Hot Tier** | $18.40 | Baseline |
+| **Cool Tier** | $10.00 | 46% savings |
+| **Archive Tier** | $2.00 | 89% savings |
+
+---
+
+## 🔒 Compliance & Security
+
+| Compliance Area | Implementation | Details |
+|----------------|----------------|---------|
+| **GDPR** | UK South region | No cross-border data transfer |
+| **MAS** | Southeast Asia (Singapore) | Data residency compliance |
+| **SOX** | East US 2 | Audit logging enabled |
+| **Encryption (Transit)** | TLS 1.2+ | All connections HTTPS only |
+| **Encryption (At-Rest)** | AES-256 | All storage and databases |
+| **RBAC** | Azure AD integration | Least-privilege access model |
+| **Network Security** | Private endpoints only | No public IPs, NSG rules enforced |
+
+---
