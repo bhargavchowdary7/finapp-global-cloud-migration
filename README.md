@@ -67,142 +67,100 @@ finapp-global-cloud-migration/
 #### Per-Region Resources (Deployed in 3 regions: East US 2, UK South, Southeast Asia)
 
 "I selected these specific Azure regions based on their alignment with the requirements:
+**Selected Regions:**
 
-East US 2 for North America provides excellent connectivity and is Microsoft's primary East Coast region
-UK South ensures GDPR compliance for European data sovereignty requirements
-Southeast Asia maps directly to Singapore and ensures compliance with MAS (Monetary Authority of Singapore) regulations
-These regions each support availability zones for zone-redundant HA, which is critical for our RTO < 1 hour requirement."
+| Region | Purpose | Compliance |
+|--------|---------|-----------|
+| **East US 2** | North America (Primary) | SOX compliance |
+| **UK South** | Europe | GDPR compliance |
+| **Southeast Asia** | Singapore | MAS compliance |
 
-**1. Resource Group**
-   - Purpose: Logical container for regional resources
-   - Naming: rg-finapp-{region}-prod
-   - Why: Enables regional isolation and independent lifecycle management
+> These regions support availability zones for zone-redundant high availability, meeting RTO < 1 hour requirements.
 
-**2. Azure Database for PostgreSQL Flexible Server**
-   - SKU: GP_Standard_D16s_v3 (16 vCores, 64GB RAM, 20K IOPS)
-   - Storage: 50TB Premium SSD (max Azure limit)
-   - HA Mode: Zone-Redundant (99.99% SLA)
-   - Why: High-performance OLTP database for 50TB financial transactions with
-         sub-50ms latency, zone-level disaster recovery (RTO < 1h, RPO < 5min)
-         PostgreSQL Flexible Server with Zone-Redundant HA for sub-50ms latency and built-in DR (RTO <1hr, RPO <5min)
+---
 
-**3. Storage Account (General Purpose v2)**
-   - Tier: Standard
-   - Replication: ZRS (Zone-Redundant Storage)
-   - Features: Blob versioning, change feed, soft delete
-   - Public Access: Disabled
-   - Why: 100TB transaction logs with data sovereignty compliance (no cross-region
-         replication), 99.9999999999% durability within region
+### Per-Region Resources (3 Regions)
 
-**4. File Shares (Azure Files Premium)**
-   - transaction-logs-share: 50TB quota
-   - archive-logs-share: 50TB quota
-   - Protocol: SMB 3.0 with encryption
-   - Why: High-throughput shared file storage for application servers, supports
-         legacy on-premises NAS migration path
+| # | Resource | Configuration | Purpose |
+|---|----------|--------------|---------|
+| **1** | **Resource Group** | `rg-finapp-{region}-prod` | Logical container for regional resources, enables independent lifecycle management |
+| **2** | **PostgreSQL Flexible Server** | SKU: GP_Standard_D16s_v3<br>Storage: 50TB Premium SSD<br>HA: Zone-Redundant | High-performance OLTP database (20K IOPS)<br>Sub-50ms latency, zone-level DR (RTO <1hr, RPO <5min) |
+| **3** | **Storage Account (Transactional)** | Tier: Standard<br>Replication: ZRS<br>Public Access: Disabled | 100TB transaction logs with data sovereignty<br>99.9999999999% durability within region |
+| **4** | **File Shares (Premium)** | `transaction-logs-share`: 50TB<br>`archive-logs-share`: 50TB<br>Protocol: SMB 3.0 | High-throughput shared storage<br>Legacy NAS migration path |
+| **5** | **Blob Containers** | `dept-files-active`: Hot tier<br>`dept-files-archive`: Archive tier<br>Lifecycle: Cool@90d, Archive@365d | Cost-optimized long-term retention<br>Automated tiering |
+| **6** | **Private Endpoints** | 4 per region:<br>• Blob Storage<br>• File Storage<br>• PostgreSQL<br>• Key Vault | Zero public internet exposure<br>All traffic over private Azure backbone |
+| **7** | **Private DNS Zones** | • privatelink.postgres.database.azure.com<br>• privatelink.blob.core.windows.net<br>• privatelink.file.core.windows.net | Automatic DNS resolution for private endpoints |
+| **8** | **Azure Key Vault** | SKU: Standard<br>Secrets: DB passwords, connection strings | Centralized secret management with audit logging |
+| **9** | **Virtual Network** | Address: 10.{region-id}.0.0/19<br>Subnets: database, storage, app | Network isolation and private endpoint hosting |
+| **10** | **Network Security Groups** | Database NSG: Port 5432<br>Storage NSG: Port 445, 443 | Layer 4 firewall rules (defense-in-depth) |
 
-**5. Blob Storage Containers**
-   - dept-files-active: Hot tier
-   - dept-files-archive: Archive tier
-   - Lifecycle Policy: Move to Cool after 90 days, Archive after 365 days
-   - Why: Cost-optimized long-term retention with automated tiering
-
-**6. Private Endpoints (x4 per region)**
-   - Blob Storage Private Endpoint
-   - File Storage Private Endpoint
-   - PostgreSQL Private Endpoint
-   - Key Vault Private Endpoint
-   - Why: Zero public internet exposure, all traffic over private Azure backbone
-
-**7. Private DNS Zones**
-   - privatelink.postgres.database.azure.com
-   - privatelink.blob.core.windows.net
-   - privatelink.file.core.windows.net
-   - Why: Automatic DNS resolution for private endpoints
-
-**8. Azure Key Vault**
-   - SKU: Standard
-   - Secrets: PostgreSQL admin password, storage connection strings
-   - Why: Centralized secret management with audit logging, integrated with
-         Terraform for password rotation
-
-**9. Virtual Network (VNet)**
-   - Address Space: 10.{region-id}.0.0/19
-   - Subnets: database-subnet, storage-subnet, app-subnet
-   - Why: Network isolation and private endpoint hosting
-
-**10. Network Security Groups (NSGs)**
-    - Database NSG: Port 5432 from app-subnet only
-    - Storage NSG: Port 445 (SMB), 443 (HTTPS) from app-subnet
-    - Why: Layer 4 firewall rules for defense-in-depth security
+---
 
 ### Use Case 2: Department Files Archive 
 
-**11. Storage Account (Archive - Separate)**
-    - Name: rg-deptfiles-prod-001
-    - Tier: Standard General Purpose v2
-    - Replication: GRS (Geo-Redundant Storage)
-    - Public Access: Disabled
-    - Tags: Environment=Production, Project=Research, CostCenter=9876
-    - Why: Separate storage for non-sensitive departmental files with geo-replication
-          for disaster recovery (different from financial data sovereignty requirement)
+| # | Resource | Configuration | Purpose |
+|---|----------|--------------|---------|
+| **11** | **Storage Account (Archive)** | Name: `rg-deptfiles-prod-001`<br>Tier: Standard GRS<br>Public Access: Disabled<br>Tags: Environment=Production, Project=Research, CostCenter=9876 | Departmental files with geo-replication for DR<br>(Different from financial data sovereignty) |
+| **12** | **Private Endpoint (Archive)** | Service: Blob | Secure access from on-premises via VPN/ExpressRoute |
 
-**12. Private Endpoint (Archive Storage)**
-    - Service: Blob
-    - Why: Secure access from on-premises via VPN/ExpressRoute
+---
 
 ### Global Resources 
 
-**13. Azure Monitor & Log Analytics Workspace**
-    - Retention: 90 days
-    - Metrics: Database CPU, Storage IOPS, Replication lag
-    - Why: Centralized monitoring, alerting for performance and availability
+| # | Resource | Configuration | Purpose |
+|---|----------|--------------|---------|
+| **13** | **Azure Monitor & Log Analytics** | Retention: 90 days<br>Metrics: DB CPU, Storage IOPS, Replication lag | Centralized monitoring and alerting |
+| **14** | **Application Insights** | APM enabled | Track API latency, transaction traces, dependencies |
 
-**14. Azure Application Insights**
-    - Purpose: Application performance monitoring (APM)
-    - Why: Track API latency, transaction traces, dependency calls
+---
 
 
 ## Resource Selection Rationale
 
-**Why PostgreSQL over SQL Server?**
-- Strong JSON/JSONB support for trading data
-- MVCC for high concurrency transaction processing
-- Better community support for cloud-native architectures
-- Open-source, lower licensing costs
+##  Resource Selection Rationale
 
-**Why ZRS over GRS for main application?**
-- Data sovereignty requirement: no cross-region replication
-- 3-AZ redundancy sufficient for RTO < 1h, RPO < 5min
-- GDPR, MAS, SOX compliance for regional data residency
+| Decision | Rationale |
+|----------|-----------|
+| **PostgreSQL over SQL Server** | • Strong JSON/JSONB support for trading data<br>• MVCC for high concurrency transaction processing<br>• Better cloud-native support<br>• Open-source, lower licensing costs |
+| **ZRS over GRS (Main App)** | • Data sovereignty requirement: no cross-region replication<br>• 3-AZ redundancy sufficient for RTO < 1h, RPO < 5min<br>• GDPR, MAS, SOX compliance for regional data residency |
+| **GRS for Department Archive** | • Non-sensitive data allows geo-replication<br>• Cost optimization through tiering (Cool/Archive)<br>• Disaster recovery without sovereignty constraints |
+| **Private Endpoints Everywhere** | • Zero public internet access requirement<br>• All traffic traverses Azure private backbone<br>• Reduces attack surface for financial application |
+| **Read Replicas (3 AZs)** | • Distributes read load across availability zones<br>• Achieves <50ms read latency target<br>• Automatic failover for high availability |
 
-**Why GRS for department archive?**
-- Non-sensitive data allows geo-replication
-- Cost optimization through tiering (Cool/Archive)
-- Disaster recovery without sovereignty constraints
+---
 
-**Why Private Endpoints everywhere?**
-- for  "zero public internet access"
-- All traffic traverses Azure private backbone
-- Reduces attack surface for financial application
+##  Cost Optimization Strategies
 
+| Strategy | Implementation | Savings |
+|----------|---------------|---------|
+| **Storage Lifecycle Policies** | Auto-tier to Cool (90d) and Archive (365d) | Up to 89% for archived data |
+| **Reserved Instances** | 3-year reserved capacity for database | Up to 65% savings |
+| **ZRS over GRS** | Regional replication only (where compliant) | ~40% lower storage costs |
+| **Right-sizing** | GP tier with Zone-Redundant HA (no BC tier) | Optimal performance/cost ratio |
 
-## Cost Optimization Strategies
+**Example Cost Breakdown:**
 
-1. **Storage Lifecycle Policies**: Auto-tier to Cool (90d) and Archive (365d)
-2. **Reserved Instances**: 3-year reserved capacity for database (up to 65% savings)
-3. **ZRS over GRS**: Lower cost while meeting sovereignty requirements
-4. **Right-sizing**: GP tier sufficient with Zone-Redundant HA (no BC tier needed)
+| Storage Tier | Cost per TB/Month | Savings vs Hot Tier |
+|--------------|-------------------|---------------------|
+| **Hot Tier** | $18.40 | Baseline |
+| **Cool Tier** | $10.00 | 46% savings |
+| **Archive Tier** | $2.00 | 89% savings |
 
+---
 
-## Compliance & Security
+##  Compliance & Security
 
-- **GDPR**: UK South region, no cross-border data transfer
-- **MAS**: Southeast Asia (Singapore) data residency
-- **SOX**: East US 2 with audit logging.
-- **Encryption**: TLS 1.2 in-transit, AES-256 at-rest (all storage/databases)
-- **RBAC**: Azure AD integration, least-privilege access model
-- **Network**: Private endpoints only, NSG rules, no public IPs
+| Compliance Area | Implementation | Details |
+|----------------|----------------|---------|
+| **GDPR** | UK South region | No cross-border data transfer |
+| **MAS** | Southeast Asia (Singapore) | Data residency compliance |
+| **SOX** | East US 2 | Audit logging enabled |
+| **Encryption (Transit)** | TLS 1.2+ | All connections HTTPS only |
+| **Encryption (At-Rest)** | AES-256 | All storage and databases |
+| **RBAC** | Azure AD integration | Least-privilege access model |
+| **Network Security** | Private endpoints only | No public IPs, NSG rules enforced |
+
+---
 
 ## Total Resource Count per Region
 
@@ -780,19 +738,14 @@ cd migration
 
 ## Important Notes
 
-1. ** Data Sovereignty**: 
-   - The `infrastructure/terraform/terraform.tfvars` file uses **ZRS** (Zone-Redundant Storage) for transactional storage accounts
-   - For the **File Share Archiving use case** , use **GRS** (Geo-Redundant Storage)
-
-2. **Private Endpoints**: All database and storage traffic flows through private endpoints. Ensure NSG rules allow traffic from application subnets.
-
-3. **Read Replicas**: The `infrastructure/terraform/modules/database/main.tf` creates 2 read replicas (AZ2 and AZ3) automatically. Application connection strings should use read replicas for SELECT queries to achieve <50ms latency.
-
-4. **Key Vault Access**: Service Principal used in Azure DevOps must have `Key Vault Secrets User` role.
-
-5. **Migration Validation**: Always run validation tests using `Invoke-DataValidation.ps1` and `Invoke-StorageValidation.ps1` post-migration before decommissioning source systems.
-
-6. **Lifecycle Policy**: Storage lifecycle management is configured for **Cool tier at 90 days** and **Archive tier at 365 days** . This is defined in `infrastructure/terraform/modules/storage/main.tf`.
+| Topic | Details |
+|-------|---------|
+| **Data Sovereignty** | `terraform.tfvars` uses **ZRS** for transactional storage<br>**GRS** for File Share Archiving use case only |
+| **Private Endpoints** | All database/storage traffic flows through private endpoints<br>Ensure NSG rules allow traffic from application subnets |
+| **Read Replicas** | Database module creates 2 read replicas (AZ2, AZ3) automatically<br>Application should use read replicas for SELECT queries (<50ms latency) |
+| **Key Vault Access** | Service Principal needs `Key Vault Secrets User` role |
+| **Migration Validation** | Always run validation tests post-migration:<br>`Invoke-DataValidation.ps1`<br>`Invoke-StorageValidation.ps1` |
+| **Lifecycle Policy** | Configured for Cool tier @ 90 days, Archive @ 365 days<br>Defined in `modules/storage/main.tf` |
 
 ---
 
@@ -898,119 +851,4 @@ finapp-global-cloud-migration/
 - [Terraform Azure Provider](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs)
 
 ```
----
-
-## 🏗️ Azure Resources Deployed
-
-### Regional Deployment Strategy
-
-**Selected Regions:**
-
-| Region | Purpose | Compliance |
-|--------|---------|-----------|
-| **East US 2** | North America (Primary) | SOX compliance |
-| **UK South** | Europe | GDPR compliance |
-| **Southeast Asia** | Singapore | MAS compliance |
-
-> These regions support availability zones for zone-redundant high availability, meeting RTO < 1 hour requirements.
-
----
-
-### Per-Region Resources (3 Regions)
-
-| # | Resource | Configuration | Purpose |
-|---|----------|--------------|---------|
-| **1** | **Resource Group** | `rg-finapp-{region}-prod` | Logical container for regional resources, enables independent lifecycle management |
-| **2** | **PostgreSQL Flexible Server** | SKU: GP_Standard_D16s_v3<br>Storage: 50TB Premium SSD<br>HA: Zone-Redundant | High-performance OLTP database (20K IOPS)<br>Sub-50ms latency, zone-level DR (RTO <1hr, RPO <5min) |
-| **3** | **Storage Account (Transactional)** | Tier: Standard<br>Replication: ZRS<br>Public Access: Disabled | 100TB transaction logs with data sovereignty<br>99.9999999999% durability within region |
-| **4** | **File Shares (Premium)** | `transaction-logs-share`: 50TB<br>`archive-logs-share`: 50TB<br>Protocol: SMB 3.0 | High-throughput shared storage<br>Legacy NAS migration path |
-| **5** | **Blob Containers** | `dept-files-active`: Hot tier<br>`dept-files-archive`: Archive tier<br>Lifecycle: Cool@90d, Archive@365d | Cost-optimized long-term retention<br>Automated tiering |
-| **6** | **Private Endpoints** | 4 per region:<br>• Blob Storage<br>• File Storage<br>• PostgreSQL<br>• Key Vault | Zero public internet exposure<br>All traffic over private Azure backbone |
-| **7** | **Private DNS Zones** | • privatelink.postgres.database.azure.com<br>• privatelink.blob.core.windows.net<br>• privatelink.file.core.windows.net | Automatic DNS resolution for private endpoints |
-| **8** | **Azure Key Vault** | SKU: Standard<br>Secrets: DB passwords, connection strings | Centralized secret management with audit logging |
-| **9** | **Virtual Network** | Address: 10.{region-id}.0.0/19<br>Subnets: database, storage, app | Network isolation and private endpoint hosting |
-| **10** | **Network Security Groups** | Database NSG: Port 5432<br>Storage NSG: Port 445, 443 | Layer 4 firewall rules (defense-in-depth) |
-
----
-
-### Department Files Archive (Separate Use Case)
-
-| # | Resource | Configuration | Purpose |
-|---|----------|--------------|---------|
-| **11** | **Storage Account (Archive)** | Name: `rg-deptfiles-prod-001`<br>Tier: Standard GRS<br>Public Access: Disabled<br>Tags: Environment=Production, Project=Research, CostCenter=9876 | Departmental files with geo-replication for DR<br>(Different from financial data sovereignty) |
-| **12** | **Private Endpoint (Archive)** | Service: Blob | Secure access from on-premises via VPN/ExpressRoute |
-
----
-
-### Global Resources (Shared)
-
-| # | Resource | Configuration | Purpose |
-|---|----------|--------------|---------|
-| **13** | **Azure Monitor & Log Analytics** | Retention: 90 days<br>Metrics: DB CPU, Storage IOPS, Replication lag | Centralized monitoring and alerting |
-| **14** | **Application Insights** | APM enabled | Track API latency, transaction traces, dependencies |
-
----
-
-### Total Resource Count Summary
-
-| Category | Count per Region | Description |
-|----------|-----------------|-------------|
-| **Compute** | 1 | PostgreSQL Flexible Server (HA mode = 2 nodes) |
-| **Storage** | 2 | Storage Accounts |
-| **Storage** | 2 | File Shares |
-| **Storage** | 2 | Blob Containers |
-| **Network** | 1 | Virtual Network |
-| **Network** | 3 | Subnets |
-| **Network** | 4 | Private Endpoints |
-| **Network** | 3 | Private DNS Zones |
-| **Network** | 2 | Network Security Groups |
-| **Security** | 1 | Key Vault |
-| **Monitoring** | 1 | Log Analytics Workspace (shared) |
-| **TOTAL** | **45+** | **Across 3 regions** |
-
----
-
-## 🔍 Resource Selection Rationale
-
-| Decision | Rationale |
-|----------|-----------|
-| **PostgreSQL over SQL Server** | • Strong JSON/JSONB support for trading data<br>• MVCC for high concurrency transaction processing<br>• Better cloud-native support<br>• Open-source, lower licensing costs |
-| **ZRS over GRS (Main App)** | • Data sovereignty requirement: no cross-region replication<br>• 3-AZ redundancy sufficient for RTO < 1h, RPO < 5min<br>• GDPR, MAS, SOX compliance for regional data residency |
-| **GRS for Department Archive** | • Non-sensitive data allows geo-replication<br>• Cost optimization through tiering (Cool/Archive)<br>• Disaster recovery without sovereignty constraints |
-| **Private Endpoints Everywhere** | • Zero public internet access requirement<br>• All traffic traverses Azure private backbone<br>• Reduces attack surface for financial application |
-| **Read Replicas (3 AZs)** | • Distributes read load across availability zones<br>• Achieves <50ms read latency target<br>• Automatic failover for high availability |
-
----
-
-## 💰 Cost Optimization Strategies
-
-| Strategy | Implementation | Savings |
-|----------|---------------|---------|
-| **Storage Lifecycle Policies** | Auto-tier to Cool (90d) and Archive (365d) | Up to 89% for archived data |
-| **Reserved Instances** | 3-year reserved capacity for database | Up to 65% savings |
-| **ZRS over GRS** | Regional replication only (where compliant) | ~40% lower storage costs |
-| **Right-sizing** | GP tier with Zone-Redundant HA (no BC tier) | Optimal performance/cost ratio |
-
-**Example Cost Breakdown:**
-
-| Storage Tier | Cost per TB/Month | Savings vs Hot Tier |
-|--------------|-------------------|---------------------|
-| **Hot Tier** | $18.40 | Baseline |
-| **Cool Tier** | $10.00 | 46% savings |
-| **Archive Tier** | $2.00 | 89% savings |
-
----
-
-## 🔒 Compliance & Security
-
-| Compliance Area | Implementation | Details |
-|----------------|----------------|---------|
-| **GDPR** | UK South region | No cross-border data transfer |
-| **MAS** | Southeast Asia (Singapore) | Data residency compliance |
-| **SOX** | East US 2 | Audit logging enabled |
-| **Encryption (Transit)** | TLS 1.2+ | All connections HTTPS only |
-| **Encryption (At-Rest)** | AES-256 | All storage and databases |
-| **RBAC** | Azure AD integration | Least-privilege access model |
-| **Network Security** | Private endpoints only | No public IPs, NSG rules enforced |
-
 ---
