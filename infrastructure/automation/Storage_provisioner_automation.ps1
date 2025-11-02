@@ -34,7 +34,7 @@
     Resource Group containing the Virtual Network
     
 .EXAMPLE
-    .\Storage_provisioner_automation.ps1 -StorageAccountName "stdeptfiles001" -VNetName "finapp-vnet" -SubnetName "private-endpoints" -VNetResourceGroup "rg-network-prod"
+    .\storage_provisioner_automation.ps1 -StorageAccountName "stdeptfiles001" -VNetName "finapp-vnet" -SubnetName "private-endpoints" -VNetResourceGroup "rg-network-prod"
     
 .NOTES
     Requires: Az.Storage, Az.Network, Az.Resources PowerShell modules
@@ -112,29 +112,29 @@ try {
     if (-not $context) {
         throw "Not logged into Azure. Run 'Connect-AzAccount' first."
     }
-    Write-Host "  ✓ Logged in as: $($context.Account.Id)" -ForegroundColor Green
-    Write-Host "  ✓ Subscription: $($context.Subscription.Name)" -ForegroundColor Green
+    Write-Host "   Logged in as: $($context.Account.Id)" -ForegroundColor Green
+    Write-Host "   Subscription: $($context.Subscription.Name)" -ForegroundColor Green
     
     # Validate VNet exists
     $vnet = Get-AzVirtualNetwork -Name $VNetName -ResourceGroupName $VNetResourceGroup -ErrorAction SilentlyContinue
     if (-not $vnet) {
         throw "Virtual Network '$VNetName' not found in resource group '$VNetResourceGroup'"
     }
-    Write-Host "  ✓ Virtual Network found: $VNetName" -ForegroundColor Green
+    Write-Host "   Virtual Network found: $VNetName" -ForegroundColor Green
     
     # Validate Subnet exists
     $subnet = Get-AzVirtualNetworkSubnetConfig -VirtualNetwork $vnet -Name $SubnetName -ErrorAction SilentlyContinue
     if (-not $subnet) {
         throw "Subnet '$SubnetName' not found in VNet '$VNetName'"
     }
-    Write-Host "  ✓ Subnet found: $SubnetName" -ForegroundColor Green
+    Write-Host "   Subnet found: $SubnetName" -ForegroundColor Green
     
     # Check storage account name availability
     $nameAvailable = Get-AzStorageAccountNameAvailability -Name $StorageAccountName
     if (-not $nameAvailable.NameAvailable) {
         throw "Storage account name '$StorageAccountName' is not available: $($nameAvailable.Reason)"
     }
-    Write-Host "  ✓ Storage account name available: $StorageAccountName" -ForegroundColor Green
+    Write-Host "   Storage account name available: $StorageAccountName" -ForegroundColor Green
     
 } catch {
     Write-Error "Prerequisites validation failed: $_"
@@ -150,13 +150,13 @@ Write-Host "`n[2/8] Creating Resource Group..." -ForegroundColor Yellow
 try {
     $rg = Get-AzResourceGroup -Name $ResourceGroupName -ErrorAction SilentlyContinue
     if ($rg) {
-        Write-Host "  ⚠ Resource Group already exists: $ResourceGroupName" -ForegroundColor DarkYellow
+        Write-Host "   Resource Group already exists: $ResourceGroupName" -ForegroundColor DarkYellow
     } else {
         $rg = New-AzResourceGroup -Name $ResourceGroupName -Location $Location -Tag $Tags
-        Write-Host "  ✓ Resource Group created: $ResourceGroupName" -ForegroundColor Green
+        Write-Host "   Resource Group created: $ResourceGroupName" -ForegroundColor Green
     }
-    Write-Host "  ✓ Location: $Location" -ForegroundColor Green
-    Write-Host "  ✓ Tags applied: Environment=$($Tags.Environment), Project=$($Tags.Project), CostCenter=$($Tags.CostCenter)" -ForegroundColor Green
+    Write-Host "   Location: $Location" -ForegroundColor Green
+    Write-Host "   Tags applied: Environment=$($Tags.Environment), Project=$($Tags.Project), CostCenter=$($Tags.CostCenter)" -ForegroundColor Green
 } catch {
     Write-Error "Failed to create Resource Group: $_"
     exit 1
@@ -184,11 +184,11 @@ try {
     }
     
     $storageAccount = New-AzStorageAccount @storageParams
-    Write-Host "  ✓ Storage Account created: $StorageAccountName" -ForegroundColor Green
-    Write-Host "  ✓ SKU: Standard_GRS (Geo-Redundant)" -ForegroundColor Green
-    Write-Host "  ✓ Public Network Access: Disabled ✓" -ForegroundColor Green
-    Write-Host "  ✓ Allow Blob Public Access: Disabled ✓" -ForegroundColor Green
-    Write-Host "  ✓ HTTPS Only: Enabled ✓" -ForegroundColor Green
+    Write-Host "   Storage Account created: $StorageAccountName" -ForegroundColor Green
+    Write-Host "   SKU: Standard_GRS (Geo-Redundant)" -ForegroundColor Green
+    Write-Host "   Public Network Access: Disabled ✓" -ForegroundColor Green
+    Write-Host "   Allow Blob Public Access: Disabled ✓" -ForegroundColor Green
+    Write-Host "   HTTPS Only: Enabled ✓" -ForegroundColor Green
     
     # Get storage context
     $ctx = $storageAccount.Context
@@ -212,7 +212,7 @@ try {
         Permission = "Off"  # No public access
     }
     New-AzStorageContainer @containerActiveParams | Out-Null
-    Write-Host "  ✓ Container created: $ContainerActive (Public Access: Off)" -ForegroundColor Green
+    Write-Host "   Container created: $ContainerActive (Public Access: Off)" -ForegroundColor Green
     
     # Create dept-files-archive container
     $containerArchiveParams = @{
@@ -221,7 +221,7 @@ try {
         Permission = "Off"  # No public access
     }
     New-AzStorageContainer @containerArchiveParams | Out-Null
-    Write-Host "  ✓ Container created: $ContainerArchive (Public Access: Off)" -ForegroundColor Green
+    Write-Host "   Container created: $ContainerArchive (Public Access: Off)" -ForegroundColor Green
     
 } catch {
     Write-Error "Failed to create containers: $_"
@@ -270,9 +270,9 @@ try {
         -AccountName $StorageAccountName `
         -Rule $policyJson
     
-    Write-Host "  ✓ Lifecycle Policy applied to container: $ContainerActive" -ForegroundColor Green
-    Write-Host "  ✓ Rule: Move to Cool tier after $CoolTierDays days" -ForegroundColor Green
-    Write-Host "  ✓ Rule: Move to Archive tier after $ArchiveTierDays days" -ForegroundColor Green
+    Write-Host "   Lifecycle Policy applied to container: $ContainerActive" -ForegroundColor Green
+    Write-Host "   Rule: Move to Cool tier after $CoolTierDays days" -ForegroundColor Green
+    Write-Host "   Rule: Move to Archive tier after $ArchiveTierDays days" -ForegroundColor Green
     
 } catch {
     Write-Error "Failed to configure lifecycle policy: $_"
@@ -290,7 +290,7 @@ try {
     $subnet.PrivateEndpointNetworkPolicies = "Disabled"
     $vnet | Set-AzVirtualNetwork | Out-Null
     
-    Write-Host "  ✓ Private Endpoint network policies disabled on subnet" -ForegroundColor Green
+    Write-Host "   Private Endpoint network policies disabled on subnet" -ForegroundColor Green
     
 } catch {
     Write-Error "Failed to configure subnet: $_"
@@ -319,9 +319,9 @@ try {
         -PrivateLinkServiceConnection $privateLinkConnection `
         -Tag $Tags
     
-    Write-Host "  ✓ Private Endpoint created: $PrivateEndpointName" -ForegroundColor Green
-    Write-Host "  ✓ Service: Blob Storage (blob)" -ForegroundColor Green
-    Write-Host "  ✓ Subnet: $SubnetName" -ForegroundColor Green
+    Write-Host "   Private Endpoint created: $PrivateEndpointName" -ForegroundColor Green
+    Write-Host "   Service: Blob Storage (blob)" -ForegroundColor Green
+    Write-Host "   Subnet: $SubnetName" -ForegroundColor Green
     
 } catch {
     Write-Error "Failed to create private endpoint: $_"
@@ -344,9 +344,9 @@ try {
             -ResourceGroupName $VNetResourceGroup `
             -Name $PrivateDnsZoneName `
             -Tag $Tags
-        Write-Host "  ✓ Private DNS Zone created: $PrivateDnsZoneName" -ForegroundColor Green
+        Write-Host "   Private DNS Zone created: $PrivateDnsZoneName" -ForegroundColor Green
     } else {
-        Write-Host "  ⚠ Private DNS Zone already exists: $PrivateDnsZoneName" -ForegroundColor DarkYellow
+        Write-Host "   Private DNS Zone already exists: $PrivateDnsZoneName" -ForegroundColor DarkYellow
     }
     
     # Link DNS Zone to VNet
@@ -363,9 +363,9 @@ try {
             -Name "$VNetName-link" `
             -VirtualNetworkId $vnet.Id `
             -Tag $Tags
-        Write-Host "  ✓ DNS Zone linked to VNet: $VNetName" -ForegroundColor Green
+        Write-Host "   DNS Zone linked to VNet: $VNetName" -ForegroundColor Green
     } else {
-        Write-Host "  ⚠ DNS Zone already linked to VNet" -ForegroundColor DarkYellow
+        Write-Host "   DNS Zone already linked to VNet" -ForegroundColor DarkYellow
     }
     
     # Create DNS A record for storage account
@@ -381,12 +381,12 @@ try {
             -PrivateDnsRecords (New-AzPrivateDnsRecordConfig -IPv4Address $privateEndpointIp) `
             -ErrorAction SilentlyContinue | Out-Null
         
-        Write-Host "  ✓ DNS A record created: $StorageAccountName.$PrivateDnsZoneName -> $privateEndpointIp" -ForegroundColor Green
+        Write-Host "   DNS A record created: $StorageAccountName.$PrivateDnsZoneName -> $privateEndpointIp" -ForegroundColor Green
     }
     
 } catch {
     Write-Warning "DNS configuration encountered non-critical errors: $_"
-    Write-Host "  ⚠ You may need to configure DNS manually" -ForegroundColor DarkYellow
+    Write-Host "   You may need to configure DNS manually" -ForegroundColor DarkYellow
 }
 
 # ============================================================================
@@ -398,26 +398,26 @@ Write-Host "DEPLOYMENT COMPLETED SUCCESSFULLY" -ForegroundColor Green
 Write-Host "========================================`n" -ForegroundColor Cyan
 
 Write-Host "Resource Summary:" -ForegroundColor White
-Write-Host "  • Resource Group: $ResourceGroupName" -ForegroundColor Gray
-Write-Host "  • Storage Account: $StorageAccountName (Standard_GRS)" -ForegroundColor Gray
-Write-Host "  • Containers: $ContainerActive, $ContainerArchive" -ForegroundColor Gray
-Write-Host "  • Private Endpoint: $PrivateEndpointName" -ForegroundColor Gray
-Write-Host "  • DNS Zone: $PrivateDnsZoneName" -ForegroundColor Gray
+Write-Host "   Resource Group: $ResourceGroupName" -ForegroundColor Gray
+Write-Host "   Storage Account: $StorageAccountName (Standard_GRS)" -ForegroundColor Gray
+Write-Host "   Containers: $ContainerActive, $ContainerArchive" -ForegroundColor Gray
+Write-Host "   Private Endpoint: $PrivateEndpointName" -ForegroundColor Gray
+Write-Host "   DNS Zone: $PrivateDnsZoneName" -ForegroundColor Gray
 
 Write-Host "`nSecurity Features:" -ForegroundColor White
-Write-Host "  ✓ Public Network Access: DISABLED" -ForegroundColor Green
-Write-Host "  ✓ Blob Public Access: DISABLED" -ForegroundColor Green
-Write-Host "  ✓ Private Endpoint: CONFIGURED" -ForegroundColor Green
-Write-Host "  ✓ HTTPS Only: ENABLED" -ForegroundColor Green
-Write-Host "  ✓ TLS 1.2+: ENFORCED" -ForegroundColor Green
+Write-Host "   Public Network Access: DISABLED" -ForegroundColor Green
+Write-Host "   Blob Public Access: DISABLED" -ForegroundColor Green
+Write-Host "   Private Endpoint: CONFIGURED" -ForegroundColor Green
+Write-Host "   HTTPS Only: ENABLED" -ForegroundColor Green
+Write-Host "   TLS 1.2+: ENFORCED" -ForegroundColor Green
 
 Write-Host "`nCost Optimization:" -ForegroundColor White
-Write-Host "  ✓ Lifecycle Policy: Cool tier @ $CoolTierDays days" -ForegroundColor Green
-Write-Host "  ✓ Lifecycle Policy: Archive tier @ $ArchiveTierDays days" -ForegroundColor Green
+Write-Host "   Lifecycle Policy: Cool tier @ $CoolTierDays days" -ForegroundColor Green
+Write-Host "   Lifecycle Policy: Archive tier @ $ArchiveTierDays days" -ForegroundColor Green
 
 Write-Host "`nCompliance:" -ForegroundColor White
-Write-Host "  ✓ Tags Applied: Environment=Production, Project=Research, CostCenter=9876" -ForegroundColor Green
-Write-Host "  ✓ GRS Replication: Enabled for DR" -ForegroundColor Green
+Write-Host "   Tags Applied: Environment=Production, Project=Research, CostCenter=9876" -ForegroundColor Green
+Write-Host "   GRS Replication: Enabled for DR" -ForegroundColor Green
 
 Write-Host "`nNext Steps:" -ForegroundColor White
 Write-Host "  1. Verify private endpoint connectivity from your VNet" -ForegroundColor Gray
