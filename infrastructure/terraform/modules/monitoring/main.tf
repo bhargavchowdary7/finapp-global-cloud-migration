@@ -105,7 +105,7 @@ resource "azurerm_monitor_metric_alert" "db_memory" {
   tags = var.tags
 }
 
-# Alert for storage latency (sub-50ms requirement from PDF)
+# Alert for storage latency (sub-50ms requirement)
 resource "azurerm_monitor_metric_alert" "storage_latency" {
   name                = "storage-latency-alert-${random_id.suffix.hex}"
   resource_group_name = var.resource_group
@@ -119,7 +119,7 @@ resource "azurerm_monitor_metric_alert" "storage_latency" {
     metric_name      = "SuccessE2ELatency"
     aggregation      = "Average"
     operator         = "GreaterThan"
-    threshold        = 50  # 50ms threshold as per PDF requirement
+    threshold        = 50  # 50ms threshold as per requirement
   }
 
   window_size        = "PT5M"

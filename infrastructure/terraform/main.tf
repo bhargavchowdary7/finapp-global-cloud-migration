@@ -140,7 +140,7 @@ module "storage_dept_files" {
   region           = "East US 2"  # Single region for dept files
   resource_group   = "rg-deptfiles-prod-001"
   account_tier     = "Standard"
-  replication_type = "GRS"  # ← PDF requires GRS for general-purpose dept files
+  replication_type = "GRS"  # ←  GRS for general-purpose dept files
   subnet_id        = data.azurerm_subnet.existing["northamerica"].id
   lifecycle_cool_tier_days   = 90
   lifecycle_archive_tier_days = 365

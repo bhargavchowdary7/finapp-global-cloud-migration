@@ -16,7 +16,7 @@ variable "cost_center" {
   default     = "9876"
 }
 
-# Regions as per PDF requirements
+# Regions as per requirements
 variable "regions" {
   description = "Azure regions for deployment with specific configurations"
   type = map(object({
