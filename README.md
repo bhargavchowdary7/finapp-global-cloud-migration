@@ -315,38 +315,6 @@ Regional failover violates data sovereignty requirements. In practice, North Ame
 
 ----
 
-##  Infrastructure Scripts (Terraform)
-
-### `infrastructure/terraform/main.tf`
-
-**Purpose**: Root Terraform configuration that orchestrates all Azure resources
-
-**Key Features**:
-- Provisions Virtual Network with 3 subnets (App, Database, Storage)
-- Creates Storage Account with ZRS replication
-- Deploys PostgreSQL Flexible Server with read replicas
-- Configures Private Endpoints for storage (blob + file) and database
-- Sets up Azure Key Vault with managed identity
-- Implements lifecycle management for blob storage
-
-**Critical Configurations**:
-
-## Lifecycle Management 
-lifecycle_cool_tier_days    = 90   # Move to Cool tier after 90 days
-lifecycle_archive_tier_days = 365  # Move to Archive tier after 365 days
-
-## Storage Replication
- ZRS for transactional data (Data Sovereignty)
- GRS for archival data (File Share Archiving use case)
-storage_replication_type_transactional = "ZRS"
-storage_replication_type_archival      = "GRS" 
-
-## Read Replicas for Latency Optimization
-- Primary DB: Availability Zone 1
-- Read Replica 1: Availability Zone 2
-- Read Replica 2: Availability Zone 3
-
----
 # Automation Scripts Overview
 
 This project includes two fully automated PowerShell Infrastructure-as-Code (IaC) scripts designed to provision and manage a secure Azure Storage infrastructure for departmental file archiving and lifecycle management.
@@ -384,6 +352,58 @@ This companion script safely and completely removes all Azure resources created 
 
 
 # Terraform script for infracstructure creation
+
+### `infrastructure/terraform/main.tf`
+
+**Purpose**: Root Terraform configuration that orchestrates all Azure resources
+
+**Key Features**:
+- Provisions Virtual Network with 3 subnets (App, Database, Storage)
+- Creates Storage Account with ZRS replication
+- Deploys PostgreSQL Flexible Server with read replicas
+- Configures Private Endpoints for storage (blob + file) and database
+- Sets up Azure Key Vault with managed identity
+- Implements lifecycle management for blob storage
+
+**Critical Configurations**:
+
+## Lifecycle Management 
+lifecycle_cool_tier_days    = 90   # Move to Cool tier after 90 days
+lifecycle_archive_tier_days = 365  # Move to Archive tier after 365 days
+
+## Storage Replication
+ ZRS for transactional data (Data Sovereignty)
+ GRS for archival data (File Share Archiving use case)
+storage_replication_type_transactional = "ZRS"
+storage_replication_type_archival      = "GRS" 
+
+## Read Replicas for Latency Optimization
+- Primary DB: Availability Zone 1
+- Read Replica 1: Availability Zone 2
+- Read Replica 2: Availability Zone 3
+
+**What It Does**:
+
+  - Generates secure random PostgreSQL admin passwords and stores them in Azure Key Vault per region
+  - Creates Resource Groups and Key Vaults in each defined region (ensuring data sovereignty)
+  - Retrieves existing Virtual Networks and Subnets for private deployment (no public exposure)
+  - Invokes reusable Terraform modules:
+      - database → Deploys PostgreSQL Flexible Server with HA
+      - storage → Deploys storage accounts with lifecycle management
+      - monitoring → Enables Log Analytics, Application Insights, and alerting
+  - Adds a dedicated GRS-replicated Storage Account for departmental file archiving (East US 2)
+
+  
+**Security & Compliance Highlights**:
+
+   - Secrets managed in Azure Key Vault (Premium SKU) with purge protection enabled
+   - Implements Zero-Trust networking (private subnets only)
+   - Enforces data sovereignty — each region deploys independently (no cross-region replication)
+   - Uses Terraform remote state and consistent tag governance for cost visibility
+  
+  **Best Practice**:  Keep terraform.tfvars environment-specific and use for_each for true multi-region scalability.
+
+---
 
 ### `infrastructure/terraform/modules/storage/main.tf`
 
@@ -451,42 +471,6 @@ This companion script safely and completely removes all Azure resources created 
 
 **Best Practice**:  Keep backend configuration separate and protect storage account access with Azure RBAC and private endpoints for secure IaC state management.
 
----
-
-### `infrastructure/terraform/main.tf`
-
-**Purpose**: Multi-Region Orchestrator for Financial Application Deployment
-
-**What It Does**:
-
-  - Generates secure random PostgreSQL admin passwords and stores them in Azure Key Vault per region
-  - Creates Resource Groups and Key Vaults in each defined region (ensuring data sovereignty)
-  - Retrieves existing Virtual Networks and Subnets for private deployment (no public exposure)
-  - Invokes reusable Terraform modules:
-      - database → Deploys PostgreSQL Flexible Server with HA
-      - storage → Deploys storage accounts with lifecycle management
-      - monitoring → Enables Log Analytics, Application Insights, and alerting
-  - Adds a dedicated GRS-replicated Storage Account for departmental file archiving (East US 2)
-
-  
-**Security & Compliance Highlights**:
-
-   - Secrets managed in Azure Key Vault (Premium SKU) with purge protection enabled
-   - Implements Zero-Trust networking (private subnets only)
-   - Enforces data sovereignty — each region deploys independently (no cross-region replication)
-   - Uses Terraform remote state and consistent tag governance for cost visibility
-
-**Key Components Created**:
-
-  - Random password + Key Vault Secret (postgresql-admin-password)
-  - Resource Groups: One per region (e.g., rg-finapp-northamerica-prod)
-  - PostgreSQL Servers (via module.database)
-  - Storage Accounts (via module.storage and module.storage_dept_files)
-  - Log Analytics, Alerts, and Application Insights (via module.monitoring)
-
-**Best Practice**:  Keep terraform.tfvars environment-specific and use for_each for true multi-region scalability.
-
-```
 ---
 
 
